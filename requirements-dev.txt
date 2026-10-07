@@ -1,0 +1,2 @@
+-r requirements-tf.txt
+pytest>=8
