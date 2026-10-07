@@ -2,7 +2,7 @@
 #    uv pip compile requirements-dev.txt -o requirements.lock
 absl-py==2.5.0
     # via
-    #   keras-nightly
+    #   keras
     #   tensorflow
 annotated-doc==0.0.5
     # via fastapi
@@ -26,7 +26,7 @@ click==8.5.0
     # via uvicorn
 colorama==0.4.6
     # via pytest
-fastapi==0.142.2
+fastapi==0.142.4
     # via -r requirements.txt
 flatbuffers==25.12.19
     # via tensorflow
@@ -40,9 +40,9 @@ h11==0.16.0
     # via
     #   httpcore
     #   uvicorn
-h5py==3.15.1
+h5py==3.14.0
     # via
-    #   keras-nightly
+    #   keras
     #   tensorflow
 httpcore==1.0.9
     # via httpx
@@ -57,7 +57,7 @@ idna==3.20
     #   requests
 iniconfig==2.3.1
     # via pytest
-keras-nightly==3.16.0.dev2026100704
+keras==3.15.1
     # via tensorflow
 libclang==18.1.1
     # via tensorflow
@@ -67,15 +67,15 @@ mdurl==0.1.2
     # via markdown-it-py
 ml-dtypes==0.6.0
     # via
-    #   keras-nightly
+    #   keras
     #   tensorflow
 namex==0.1.0
-    # via keras-nightly
-numpy==2.5.3
+    # via keras
+numpy==2.4.6
     # via
     #   -r requirements-tf.txt
     #   h5py
-    #   keras-nightly
+    #   keras
     #   ml-dtypes
     #   opencv-python
     #   tensorflow
@@ -86,10 +86,10 @@ opentelemetry-api==1.45.1
 opt-einsum==3.4.0
     # via tensorflow
 optree==0.20.0
-    # via keras-nightly
+    # via keras
 packaging==26.3
     # via
-    #   keras-nightly
+    #   keras
     #   pytest
     #   tensorflow
     #   wheel
@@ -122,7 +122,9 @@ pyyaml==6.0.3
 requests==2.34.2
     # via tensorflow
 rich==15.0.0
-    # via keras-nightly
+    # via keras
+setuptools==84.0.0
+    # via tensorflow
 six==1.17.0
     # via
     #   astunparse
@@ -130,7 +132,7 @@ six==1.17.0
     #   tensorflow
 starlette==1.7.0
     # via fastapi
-tensorflow==2.22.0rc0
+tensorflow==2.21.0
     # via -r requirements-tf.txt
 termcolor==3.3.0
     # via tensorflow
@@ -143,6 +145,7 @@ typing-extensions==4.16.0
     #   optree
     #   pydantic
     #   pydantic-core
+    #   starlette
     #   tensorflow
     #   typing-inspection
 typing-inspection==0.4.4
