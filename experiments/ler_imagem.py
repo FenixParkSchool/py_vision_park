@@ -5,7 +5,7 @@ import cv2
 # Cada célula (linha, coluna) é um pixel, e as 3 camadas dão a quantidade de azul, verde e vermelho dele, de 0 (nada) a 255 (máximo).
 
 # 1) Ler a imagem e validar ANTES de usar (imread devolve None se falhar, sem avisar)
-imagem = cv2.imread("tests/carro.png")
+imagem = cv2.imread("experiments/carro.png")
 
 if imagem is None:
     raise FileNotFoundError("Não consegui abrir a imagem, confira o caminho")
@@ -35,12 +35,12 @@ trocada = cv2.cvtColor(imagem, cv2.COLOR_BGR2RGB)
 
 # 8) Salvar tudo. imwrite devolve False (sem erro) se não conseguir gravar
 arquivos = {
-    "tests/carro_reduzida.png": reduzida,
-    "tests/carro_cinza.png": cinza,
-    "tests/carro_azul.png": azul,
-    "tests/carro_verde.png": verde,
-    "tests/carro_vermelho.png": vermelho,
-    "tests/carro_trocada.png": trocada,
+    "experiments/carro_reduzida.png": reduzida,
+    "experiments/carro_cinza.png": cinza,
+    "experiments/carro_azul.png": azul,
+    "experiments/carro_verde.png": verde,
+    "experiments/carro_vermelho.png": vermelho,
+    "experiments/carro_trocada.png": trocada,
 }
 
 for caminho, img in arquivos.items():
