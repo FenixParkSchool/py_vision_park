@@ -5,6 +5,7 @@ models/
 data/
 *.keras
 *.h5
+# frames/
 
 
 # Byte-compiled / optimized / DLL files
