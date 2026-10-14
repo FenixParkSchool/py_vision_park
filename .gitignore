@@ -6,6 +6,7 @@ data/
 *.keras
 *.h5
 # frames/
+experiments/crops/
 
 
 # Byte-compiled / optimized / DLL files
