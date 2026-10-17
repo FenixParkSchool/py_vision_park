@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
+from anyio import Path
+
 from app.schemas.recognition import BoundingBox
+
+from pathlib import Path
 
 CAMPOS_OBRIGATORIOS = {"type", "plate", "layout", "corners"}
 
@@ -37,3 +41,27 @@ def parse_annotation(texto: str) -> PlateAnnotation:
     ys = [y for _, y in pontos]
     bbox = BoundingBox(x=min(xs), y=min(ys), width=max(xs) - min(xs), height=max(ys) - min(ys))
     return PlateAnnotation(campos["type"], campos["plate"], campos["layout"], bbox)
+
+@dataclass(frozen=True)
+class Sample:
+    """Uma imagem do dataset junto do seu gabarito."""
+
+    image_path: Path
+    annotation: PlateAnnotation
+
+
+def find_images(raiz: Path) -> list[Path]:
+    """Todas as imagens .jpg dentro da pasta (inclusive subpastas), em ordem estável."""
+    return sorted(raiz.rglob("*.jpg"))
+
+
+def load_sample(image_path: Path) -> Sample:
+    """Lê o gabarito (.txt de mesmo nome) de uma imagem. Levanta erro se faltar ou for inválido."""
+    arquivo = image_path.with_suffix(".txt")
+    if not arquivo.is_file():
+        raise FileNotFoundError(f"Sem anotação para {image_path}")
+    try:
+        anotacao = parse_annotation(arquivo.read_text(encoding="utf-8"))
+    except ValueError as erro:
+        raise ValueError(f"{arquivo}: {erro}") from erro
+    return Sample(image_path, anotacao)
