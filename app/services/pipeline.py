@@ -8,6 +8,7 @@ import numpy as np
 from app.recognition.base import PlateDetector, PlateReader
 from app.recognition.preprocessing import crop_region
 from app.schemas.recognition import PlateObservation
+from app.services.deduplicator import Deduplicator
 
 log = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ class RecognitionPipeline:
         reader: PlateReader,
         camera_id: str,
         min_confidence: float,
+        deduplicator: Deduplicator | None = None,
     ) -> None:
         self._detector = detector
         self._reader = reader
@@ -28,6 +30,7 @@ class RecognitionPipeline:
         # Vale para a detecção e para a leitura, cada uma comparada com este valor.
         # Valor provisório de desenvolvimento, ainda não validado com dados reais.
         self._min_confidence = min_confidence
+        self._deduplicator = deduplicator
 
     def process_frame(self, frame: np.ndarray, captured_at: datetime) -> list[PlateObservation]:
         inicio = time.perf_counter()
@@ -69,4 +72,10 @@ class RecognitionPipeline:
         for frame in frames:
             # Instante em que o frame chegou ao pipeline, antes da inferência demorada.
             captured_at = datetime.now(timezone.utc)
-            yield from self.process_frame(frame, captured_at)
+            for observacao in self.process_frame(frame, captured_at):
+                if self._deduplicator is not None and self._deduplicator.is_duplicate(
+                    observacao.camera_id, observacao.plate_text
+                ):
+                    log.debug("Leitura repetida suprimida")
+                    continue
+                yield observacao

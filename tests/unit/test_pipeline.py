@@ -7,6 +7,7 @@ from app.recognition.base import PlateDetection, PlateReading
 from app.recognition.fakes import FakePlateDetector, FakePlateReader
 from app.schemas.recognition import BoundingBox
 from app.services.pipeline import RecognitionPipeline
+from app.services.deduplicator import Deduplicator
 
 AGORA = datetime(2026, 10, 14, 12, 0, tzinfo=timezone.utc)
 CAIXA = BoundingBox(x=10, y=20, width=30, height=40)
@@ -106,3 +107,18 @@ def test_stream_processa_cada_frame_com_data_em_utc():
     resultado = list(pipeline.process_stream([frame(), frame(), frame()]))
     assert len(resultado) == 3
     assert all(o.captured_at.utcoffset().total_seconds() == 0 for o in resultado)
+    
+class RelogioFalso:
+    def __call__(self):
+        return 0.0
+
+
+def test_stream_com_deduplicador_reporta_a_mesma_placa_uma_so_vez():
+    pipeline = RecognitionPipeline(
+        FakePlateDetector([deteccao(0.9)]),
+        FakePlateReader(PlateReading("ABC1D23", 0.9)),
+        camera_id="portaria-1",
+        min_confidence=0.6,
+        deduplicator=Deduplicator(30, clock=RelogioFalso()),
+    )
+    assert len(list(pipeline.process_stream([frame()] * 3))) == 1
