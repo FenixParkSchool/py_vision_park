@@ -7,6 +7,7 @@ data/
 *.h5
 # frames/
 experiments/crops/
+experiments/preparados/
 
 
 # Byte-compiled / optimized / DLL files
