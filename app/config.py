@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     min_confidence: float = Field(default=0.6, ge=0, le=1)
     dedup_seconds: float = Field(default=30, gt=0)
     sample_interval_seconds: float = Field(default=1.0, gt=0)
+    backend_timeout: float = Field(default=5, gt=0)
+    backend_max_retries: int = Field(default=3, ge=0)
     
     # Os valores 0.6, 30 e 1.0 são padrões de desenvolvimento, ainda não validados. Só serão ajustados quando houver dados reais.
 
