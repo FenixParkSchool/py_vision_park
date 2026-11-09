@@ -188,3 +188,10 @@ Já feitos em 06/11: contrato com o backend, evento de saída, `backend_client.p
 **Pendências de outras equipes (só com autorização)**: testes da rota `/eventos-alpr` e `.env.example` no Back_park; o Front_Park não referencia `eventos-alpr`.
 
 **Commits**: sem `Co-Authored-By` (pedido do usuário); autor é o usuário (`dasilva-thiago`).
+
+
+## 11. Backend: integração ALPR restaurada (09/11/2026, branch, ainda sem merge)
+- Diagnóstico: os merges de 06/11 do Back_park (commit `c8c33ba`, Alice-Oliveira-22, e conflitos em `544b2b6`) removeram a rota `/eventos-alpr` de `routes/index.ts`, tiraram `ALPR_API_KEY` do `env.ts` e deixaram marcadores de conflito em `contract.prisma` (`contract.json`/`.d.ts` sem `EventoAlpr`). Resultado: POST dava 404 e o build quebrava.
+- Correção no Back_park, branch `fix/integracao-alpr` (commit `a54ed8d`, **pushada, sem PR nem merge na main**): conflitos resolvidos (EventoAlpr e Movimentacao, mantendo índices/check), `npm run contract:emit` ok (storageHash igual ao da pasta `migrations/snapshots`), `ALPR_API_KEY` opcional com mínimo 32 em `env.ts`, rota e middleware religados. `npm run typecheck` passa.
+- Verificado com o servidor real (porta 3099): sem chave 401, chave errada 401, corpo inválido com chave correta 400 com os erros do zod. **Não testado**: POST válido 201/200 (grava no banco de `DATABASE_URL`) e se a tabela `evento_alpr` existe no banco. Fazer com autorização do usuário.
+- Pendências: abrir PR da branch e avisar a equipe (Alice) para não reverter de novo; rodar `npm test` no Back_park; criar teste da rota `/eventos-alpr`; `.env.example` no Back_park com `ALPR_API_KEY`. Front_Park: nada a fazer.
