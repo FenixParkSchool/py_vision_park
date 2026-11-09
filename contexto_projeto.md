@@ -195,3 +195,11 @@ Já feitos em 06/11: contrato com o backend, evento de saída, `backend_client.p
 - Correção no Back_park, branch `fix/integracao-alpr` (commit `a54ed8d`, **pushada, sem PR nem merge na main**): conflitos resolvidos (EventoAlpr e Movimentacao, mantendo índices/check), `npm run contract:emit` ok (storageHash igual ao da pasta `migrations/snapshots`), `ALPR_API_KEY` opcional com mínimo 32 em `env.ts`, rota e middleware religados. `npm run typecheck` passa.
 - Verificado com o servidor real (porta 3099): sem chave 401, chave errada 401, corpo inválido com chave correta 400 com os erros do zod. **Não testado**: POST válido 201/200 (grava no banco de `DATABASE_URL`) e se a tabela `evento_alpr` existe no banco. Fazer com autorização do usuário.
 - Pendências: abrir PR da branch e avisar a equipe (Alice) para não reverter de novo; rodar `npm test` no Back_park; criar teste da rota `/eventos-alpr`; `.env.example` no Back_park com `ALPR_API_KEY`. Front_Park: nada a fazer.
+
+### Verificação completa do backend (09/11/2026, commit `20c906f` na branch `fix/integracao-alpr`)
+- **Tabela `evento_alpr` existe** no banco (Neon, sa-east-1, o mesmo do `.env`).
+- **Bug real achado pelo POST válido**: dava 500 porque a coluna TIMESTAMP exige `Temporal.PlainDateTime`, e o service passava `Date`. Corrigido com `toPlainDateTimeUtc` em `src/lib/temporal.ts` (grava em UTC).
+- **Teste novo** `Back_park/tests/evento-alpr.test.mjs`: 401 sem chave/chave errada, 400 (corpo inválido, campo extra, confiança > 1, data fora do ISO), 201, 200 duplicado com o mesmo id, placa normalizada `abc-1d23` -> `ABC1D23`. Grava no banco real com `eventId` `teste-alpr-*` e apaga tudo no final (conferido: nenhuma sobra). 4/4 passam.
+- `Back_park/.env.example` criado com `ALPR_API_KEY`; valor vazio é aceito (equivale a não configurada, 503).
+- **`npm test` completo**: o `rbac.test.mjs` já falhava por motivo não relacionado: o banco tem os tipos `Administrador`/`Funcionario`/`Vigilante` e o teste procura `ADMIN`/`VIGILANTE`/`FUNCIONARIO`. O conserto provável é `npm run rbac:init`, que **escreve no banco compartilhado**; não rodei sem autorização. Abrir PR e combinar com a equipe.
+- Falta ainda: PR da branch para a main do Back_park e um teste ponta a ponta do py_vision_park contra o backend real (com `BACKEND_API_KEY` = `ALPR_API_KEY`).
