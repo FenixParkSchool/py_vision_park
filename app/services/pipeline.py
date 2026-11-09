@@ -23,6 +23,7 @@ class RecognitionPipeline:
         camera_id: str,
         min_confidence: float,
         deduplicator: Deduplicator | None = None,
+        ocr_min_confidence: float | None = None,
     ) -> None:
         self._detector = detector
         self._reader = reader
@@ -30,6 +31,7 @@ class RecognitionPipeline:
         # Vale para a detecção e para a leitura, cada uma comparada com este valor.
         # Valor provisório de desenvolvimento, ainda não validado com dados reais.
         self._min_confidence = min_confidence
+        self._ocr_min_confidence = min_confidence if ocr_min_confidence is None else ocr_min_confidence
         self._deduplicator = deduplicator
 
     def process_frame(self, frame: np.ndarray, captured_at: datetime) -> list[PlateObservation]:
@@ -48,7 +50,7 @@ class RecognitionPipeline:
             if leitura is None or not leitura.text.strip():
                 log.debug("Placa detectada, mas ilegível")
                 continue
-            if leitura.confidence < self._min_confidence:
+            if leitura.confidence < self._ocr_min_confidence:
                 continue
             observacoes.append(
                 PlateObservation(

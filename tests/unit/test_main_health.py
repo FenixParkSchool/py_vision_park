@@ -61,4 +61,23 @@ def test_ready_200_com_camera_aberta(monkeypatch):
     monkeypatch.setattr(main, "CameraSource", FakeCamera)
     with TestClient(main.app) as client:
         time.sleep(0.2)
-        assert client.get("/health/ready").status_code == 200
+        r = client.get("/health/ready")
+        assert r.status_code == 200
+        assert r.json()["invalid_plates"] == 0
+
+
+def test_modo_tf_sem_modelo_deixa_ready_503(monkeypatch, tmp_path):
+    def settings():
+        return Settings(
+            backend_api_key="k" * 32,
+            recognition_mode="tf",
+            detector_model_path=str(tmp_path / "nao_existe.keras"),
+            ocr_model_path=str(tmp_path / "nao_existe2.keras"),
+        )
+
+    monkeypatch.setattr(main, "get_settings", settings)
+    monkeypatch.setattr(main, "CameraSource", FakeCamera)
+    with TestClient(main.app) as client:
+        r = client.get("/health/ready")
+        assert r.status_code == 503
+        assert "Modelo não encontrado" in r.json()["reason"]

@@ -14,6 +14,18 @@ ENDPOINT = "/eventos-alpr"
 _RETRY_STATUS = {409, 429}
 
 
+MAX_RETRY_AFTER_S = 30.0  # teto: nunca travar o worker por causa de um header exagerado
+
+
+def _retry_after(resp: httpx.Response) -> float | None:
+    """Lê Retry-After em segundos (o formato data HTTP é ignorado). None se ausente/inválido."""
+    try:
+        valor = float(resp.headers["Retry-After"])
+    except (KeyError, ValueError):
+        return None
+    return min(max(valor, 0.0), MAX_RETRY_AFTER_S)
+
+
 class BackendError(Exception):
     pass
 
@@ -58,21 +70,25 @@ class BackendClient:
         """Envia o evento. Devolve True se o backend já o conhecia (duplicado)."""
         payload = event.to_payload()  # o mesmo eventId vai em todas as tentativas
         reason = "nenhuma tentativa"
+        retry_after: float | None = None
         for attempt in range(self._max_retries + 1):
             try:
                 resp = self._client.post(ENDPOINT, json=payload)
             except httpx.TransportError as exc:  # timeout, conexão recusada, DNS...
                 reason = type(exc).__name__
+                retry_after = None
             else:
                 if resp.status_code in (200, 201):
                     return bool(resp.json().get("duplicado", False))
                 if not _retryable(resp.status_code):
                     raise BackendRejected(f"HTTP {resp.status_code}: {resp.text[:200]}")
                 reason = f"HTTP {resp.status_code}"
+                retry_after = _retry_after(resp) if resp.status_code == 429 else None
 
             if attempt < self._max_retries:
                 logger.warning("envio falhou (%s); tentativa %d", reason, attempt + 1)
-                self._sleep(self._backoff_s * 2**attempt)  # 0.5s, 1s, 2s...
+                espera = self._backoff_s * 2**attempt  # 0.5s, 1s, 2s...
+                self._sleep(max(espera, retry_after) if retry_after is not None else espera)
         raise BackendUnavailable(f"sem sucesso após {self._max_retries + 1} tentativas: {reason}")
 
     def close(self) -> None:

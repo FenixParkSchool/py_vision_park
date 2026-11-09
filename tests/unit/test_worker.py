@@ -120,3 +120,18 @@ def test_stop_encerra_thread_e_fecha_camera():
     assert w.ready
     w.stop()
     assert cam.stopped and cam.closed and not w.running and not w.ready
+
+
+def test_placa_de_formato_invalido_nao_e_enviada():
+    chamadas = []
+    pipeline = RecognitionPipeline(
+        FakePlateDetector([PlateDetection(BoundingBox(x=2, y=2, width=10, height=10), 0.9)]),
+        FakePlateReader(PlateReading("ABCID23", 0.9)),  # I no lugar do 1: não é corrigido
+        "cam-1", 0.5, Deduplicator(60),
+    )
+    w = AlprWorker(FakeCamera(1), pipeline,
+                   make_client(lambda r: chamadas.append(r) or httpx.Response(201, json={})))
+    w.start()
+    wait_done(w)
+    assert chamadas == []
+    assert w.invalid_plates == 1 and w.events_sent == 0

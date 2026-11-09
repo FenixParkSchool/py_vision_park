@@ -5,6 +5,7 @@ from collections.abc import Iterator
 import numpy as np
 from pydantic import ValidationError
 
+from app.recognition.plate_format import normalize_plate
 from app.schemas.events import PlateEvent
 from app.services.backend_client import BackendClient, BackendRejected, BackendUnavailable
 
@@ -30,6 +31,7 @@ class AlprWorker:
         self.events_sent = 0
         self.duplicates = 0
         self.send_failures = 0
+        self.invalid_plates = 0
 
     @property
     def running(self) -> bool:
@@ -76,6 +78,12 @@ class AlprWorker:
             self._camera_open = False
 
     def _send(self, obs) -> None:
+        # Só placas Mercosul/antigas seguem para o backend; o texto cru não é logado por padrão.
+        plate = normalize_plate(obs.plate_text)
+        if not plate.is_valid:
+            self.invalid_plates += 1
+            log.info("Leitura descartada: formato de placa inválido")
+            return
         try:
             event = PlateEvent.from_observation(obs)
             if self._client.send(event):

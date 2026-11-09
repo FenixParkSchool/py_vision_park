@@ -1,6 +1,8 @@
 import logging
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import FastAPI, Response
 
 from app.camera.source import CameraSource
@@ -16,11 +18,29 @@ log = logging.getLogger(__name__)
 
 
 def build_pipeline(settings, deduplicator: Deduplicator) -> RecognitionPipeline:
-    # TODO: trocar os fakes pelo detector/OCR reais quando o passo 1 estiver integrado.
-    detector: PlateDetector = FakePlateDetector()
-    reader: PlateReader = FakePlateReader(None)
+    if settings.recognition_mode == "tf":
+        # Importação tardia: só o modo real paga o custo do TensorFlow. Modelo ausente levanta
+        # FileNotFoundError, tratado no lifespan (vira startup_error e /health/ready 503).
+        from app.recognition.model_card import describe
+        from app.recognition.tf_models import TfPlateDetector, TfPlateReader
+
+        detector: PlateDetector = TfPlateDetector.from_file(
+            Path(settings.detector_model_path), threshold=settings.detector_threshold
+        )
+        reader: PlateReader = TfPlateReader.from_file(Path(settings.ocr_model_path))
+        log.info("Detector: %s", describe(Path(settings.detector_model_path)))
+        log.info("OCR: %s", describe(Path(settings.ocr_model_path)))
+    else:
+        log.warning("RECOGNITION_MODE=fake: nenhuma placa será detectada de verdade")
+        detector = FakePlateDetector()
+        reader = FakePlateReader(None)
     return RecognitionPipeline(
-        detector, reader, settings.camera_id, settings.min_confidence, deduplicator
+        detector,
+        reader,
+        settings.camera_id,
+        settings.min_confidence,
+        deduplicator,
+        ocr_min_confidence=settings.ocr_min_confidence,
     )
 
 
@@ -34,16 +54,21 @@ async def lifespan(app: FastAPI):
         app.state.startup_error = "BACKEND_API_KEY não configurada"
         log.error(app.state.startup_error)
     else:
-        camera = CameraSource(settings.camera_source, settings.sample_interval_seconds)
-        client = BackendClient(
-            settings.backend_url,
-            settings.backend_api_key,
-            timeout=settings.backend_timeout,
-            max_retries=settings.backend_max_retries,
-        )
-        pipeline = build_pipeline(settings, Deduplicator(settings.dedup_seconds))
-        app.state.worker = AlprWorker(camera, pipeline, client)
-        app.state.worker.start()
+        try:
+            pipeline = build_pipeline(settings, Deduplicator(settings.dedup_seconds))
+        except Exception as exc:  # modelo ausente/corrompido: serviço sobe, mas não fica ready
+            app.state.startup_error = f"Falha ao montar o reconhecimento: {type(exc).__name__}: {exc}"
+            log.error(app.state.startup_error)
+        else:
+            camera = CameraSource(settings.camera_source, settings.sample_interval_seconds)
+            client = BackendClient(
+                settings.backend_url,
+                settings.backend_api_key,
+                timeout=settings.backend_timeout,
+                max_retries=settings.backend_max_retries,
+            )
+            app.state.worker = AlprWorker(camera, pipeline, client)
+            app.state.worker.start()
     try:
         yield
     finally:
@@ -80,4 +105,5 @@ def ready(response: Response) -> dict:
         "events_sent": worker.events_sent,
         "duplicates": worker.duplicates,
         "send_failures": worker.send_failures,
+        "invalid_plates": worker.invalid_plates,
     }

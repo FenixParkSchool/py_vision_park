@@ -10,6 +10,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from app.recognition.model_card import write_card
 from app.recognition.tf_models import DETECTOR_INPUT_WIDTH, DETECTOR_PATH, DETECTOR_STRIDE, to_gray
 from training.rds import find_images, load_sample
 from training.split import split_paths
@@ -139,7 +140,7 @@ def main() -> None:
 
     modelo = build_model()
     modelo.compile(optimizer=keras.optimizers.Adam(2e-3), loss=weighted_bce)
-    modelo.fit(
+    historico = modelo.fit(
         treino,
         validation_data=validacao,
         epochs=args.epochs,
@@ -148,7 +149,16 @@ def main() -> None:
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     modelo.save(args.out)
-    print("Salvo em", args.out)
+    write_card(
+        args.out,
+        "detector",
+        params={"per_folder": args.per_folder, "epochs": args.epochs, "seed": SEED,
+                "pos_weight": POS_WEIGHT, "max_zoom": MAX_ZOOM, "input_width": DETECTOR_INPUT_WIDTH},
+        metrics={"train_loss": float(historico.history["loss"][-1]),
+                 "val_loss": float(historico.history["val_loss"][-1])},
+        dataset={"train": len(x_tr), "val": len(x_va)},
+    )
+    print("Salvo em", args.out, "(ficha:", args.out.with_suffix(".json"), ")")
 
 
 if __name__ == "__main__":

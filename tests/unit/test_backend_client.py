@@ -112,3 +112,19 @@ def test_esgota_tentativas():
 def test_recusa_chave_vazia():
     with pytest.raises(ValueError):
         BackendClient("http://backend", "  ")
+
+
+def test_429_respeita_retry_after():
+    respostas = [httpx.Response(429, headers={"Retry-After": "7"}), httpx.Response(201, json={})]
+    c, sleeps = _client(lambda r: respostas.pop(0))
+    c.send(_event())
+    assert sleeps == [7.0]  # maior que o backoff de 0.5s
+
+
+def test_retry_after_tem_teto_e_ignora_lixo():
+    respostas = [httpx.Response(429, headers={"Retry-After": "9999"}),
+                 httpx.Response(429, headers={"Retry-After": "amanha"}),
+                 httpx.Response(201, json={})]
+    c, sleeps = _client(lambda r: respostas.pop(0))
+    c.send(_event())
+    assert sleeps == [30.0, 1.0]  # teto de 30s; header inválido volta ao backoff

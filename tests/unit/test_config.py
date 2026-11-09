@@ -29,3 +29,7 @@ def test_confianca_acima_de_1_e_rejeitada(monkeypatch):
     monkeypatch.setenv("MIN_CONFIDENCE", "1.5")
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+def test_env_example_carrega_com_ocr_min_confidence_vazio():
+    s = Settings(_env_file=".env.example")
+    assert s.ocr_min_confidence is None and s.recognition_mode == "fake"

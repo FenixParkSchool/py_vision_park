@@ -1,6 +1,6 @@
-c# Contexto do projeto: Microserviço ALPR (reconhecimento de placas)
+# Contexto do projeto: Microserviço ALPR (reconhecimento de placas)
 
-> Arquivo de handoff para outra conversa do Claude. Descreve o que já foi construído, as decisões tomadas e o que falta. Baseado no estado dos arquivos do repositório até 05/11/2026. Não afirmo que os testes foram executados por mim; a lista abaixo diz apenas que os testes existem.
+> Arquivo de handoff para outra conversa do Claude. Descreve o que já foi construído, as decisões tomadas e o que falta. Baseado no estado dos arquivos do repositório até 06/11/2026 (seção 8 resume o que mudou nesta data). Os testes citados existem; a contagem de testes passando está na seção 8 e foi reportada pela execução do usuário/agente, não reverificada aqui.
 
 ## 1. Objetivo e fronteira
 
@@ -64,7 +64,13 @@ O repo tem um `skills.md` (guia para assistentes de IA). Pontos principais:
 
 **Experimentos (`experiments/`)**: `ler_imagem.py` (conceitos de shape/BGR/resize), `testar_fonte.py` (lê vídeo e salva frames em `experiments/frames`), `testar_pipeline.py` (pipeline com detector falso e `CAIXA` chutada, salva recortes), `varrer_dataset.py` (conta layouts/tipos/erros do RodoSol em `data/rodosol`), `medir_recortes.py` (estatísticas de largura/altura das placas por pasta e salva alguns recortes em `experiments/crops`).
 
-**`app/main.py`**: ainda é **mock**: `GET /` health simples e `POST /reconhecer` devolvendo placa fixa `ABC1D23`. Não usa câmera, pipeline nem configuração.
+**`app/schemas/events.py`** (06/11): `PlateEvent` = evento enviado ao backend. Campos em snake_case no Python e camelCase no JSON (`alias_generator=to_camel`, `populate_by_name`). `from_observation(obs, event_id=None)` gera `event_id` (`uuid4().hex`, 32 caracteres) e normaliza a placa só para o que o backend aceita (maiúsculas, apenas A-Z e 0-9; vazio levanta `ValidationError`). `to_payload()` usa `model_dump(by_alias=True, mode="json")`. Não leva `bbox`. Isso **não** é a validação Mercosul/antiga (continua pendente).
+
+**`app/services/backend_client.py`** (06/11): `BackendClient(base_url, api_key, timeout, max_retries, backoff_s, transport, sleep)` com um `httpx.Client` reutilizado e header `X-API-Key`. `send(event) -> bool` (True se o backend respondeu `duplicado`). Sucesso: 200/201. Repete (mesmo `eventId`, backoff exponencial 0.5s, 1s, 2s) em erro de transporte/timeout, 409, 429 e 5xx exceto 503. Não repete em 400, 401, 503 (`BackendRejected`). Esgotadas as tentativas: `BackendUnavailable`. Chave vazia levanta `ValueError`. `Retry-After` do 429 não é tratado. Testes: `tests/unit/test_backend_client.py` (`httpx.MockTransport`).
+
+**`app/services/worker.py`** (06/11, criado pelo agente `alpr-implementador`): worker em thread própria que abre a câmera, consome `camera.frames()`, passa pelo pipeline, converte em `PlateEvent` e envia pelo `BackendClient`. Falha de envio é logada (sem chave nem placa completa) e **não derruba** o worker; o evento é perdido (sem fila). `CameraReadError`/`CameraOpenError` ou erro de detector/leitor param o worker e deixam `ready` falso. `stop()` chama `camera.stop()`, faz join com timeout e `camera.close()`. Expõe estado (running, ready, last_error) e contadores (frames, enviados, duplicados informados pelo backend, falhas de envio). Fim de vídeo gravado termina sem erro e `ready` fica falso. Testes: `test_worker.py`.
+
+**`app/main.py`** (reescrito em 06/11): lifespan cria `CameraSource`, `BackendClient`, `Deduplicator`, pipeline (via `build_pipeline(settings, deduplicator)`, **ainda com detector/OCR fake**, com TODO para trocar pelos reais) e worker; sobe o worker no startup e encerra tudo no shutdown. `GET /health/live` (sempre 200) e `GET /health/ready` (200 só com worker rodando e câmera aberta; 503 com motivo). Sem `BACKEND_API_KEY`: nenhum worker sobe e `ready` devolve 503 "BACKEND_API_KEY não configurada". O mock `/reconhecer` e o `GET /` foram removidos. Testes: `test_main_health.py` (TestClient).
 
 ### Ferramental
 - `iniciar.py` (Windows): cria `.venv` com `uv venv --python 3.11`, instala via `uv pip sync requirements.lock` (ou compila a partir de `requirements-dev.txt`) e sobe `uvicorn app.main:app --reload`.
@@ -81,6 +87,12 @@ O repo tem um `skills.md` (guia para assistentes de IA). Pontos principais:
 - Deduplicação por (câmera, placa), janela deslizante, em memória.
 - Timestamps com fuso (UTC); `captured_at` = chegada do frame ao pipeline.
 
+- (06/11) Fonte de vídeo é **câmera USB** (`CAMERA_SOURCE=0`); sem RTSP, sem reconexão de rede. Vídeo gravado só para testes/desenvolvimento.
+- (06/11) Evento de saída (`PlateEvent`) separado de `PlateObservation`; `bbox` não é enviado (o backend rejeita campo extra com 400).
+- (06/11) Idempotência por `event_id` gerado no microsserviço; reenvios reutilizam o mesmo id.
+- (06/11) Política de perda: falha definitiva de envio descarta o evento (sem fila/banco), registrando log sem dados sensíveis.
+- (06/11) Dataset RodoSol (+9 GB) e modelos ficam fora do git e **apenas no computador do Senac**; treino, medições e avaliação com imagens reais são feitos lá (ou aqui depois que o usuário baixar os arquivos). Testes automatizados nunca podem depender dessas imagens.
+
 ## 5. Desvios e pontos de atenção observados no repo
 - O `skills.md` manda usar `pyproject.toml` + `uv.lock`; o repo usa `requirements*.txt` + `requirements.lock` com `uv pip`. Não há `pyproject.toml` nos arquivos vistos. Decidir se isso é intencional.
 - Nomes de variáveis de ambiente sem prefixo `VISION_` (o guia sugere, mas manda manter nomes existentes).
@@ -91,15 +103,17 @@ O repo tem um `skills.md` (guia para assistentes de IA). Pontos principais:
 - `Deduplicator` é aplicado em `process_stream`, não em `process_frame`.
 
 ## 6. O que falta (ordem sugerida)
-1. **Milestone 4, detector e OCR reais**: decidir modelo/estratégia (treinar com RodoSol-ALPR ou usar pesos aprovados), contrato de entrada/saída, cor BGR vs RGB, normalização, licença. Ainda **não existe** nenhum modelo nem código TensorFlow. Já há leitor de dataset e medições de tamanho de placa para embasar isso.
-2. Normalização e validação de formato de placa (Mercosul e formato antigo brasileiro), sem "corrigir" caracteres ambíguos à força; guardar texto cru para diagnóstico.
-3. Limiares separados para detecção e OCR, escolhidos com dados reais; avaliação repetível em imagens rotuladas.
-4. **Milestone 7, `services/backend_client.py`** com HTTPX: depende do contrato acordado com a equipe do backend (URL, método, rota, autenticação, campos, ID do evento/idempotência, retries). Ainda indefinido; não inventar.
-5. Payload/evento de saída e `event_id`, separado de `PlateObservation`.
-6. **Milestone 8**: worker contínuo (thread/processo separado, nunca loop dentro de rota HTTP), `main.py` com lifespan, health `live`/`ready` refletindo o estado real, substituir o mock `/reconhecer`.
-7. Reconexão com backoff para fonte ao vivo (hoje a fonte ao vivo apenas levanta `CameraReadError`).
-8. README, `.env.example` atualizado, documentação do contrato e da política de perda de eventos.
-9. **Milestone 9**: teste ponta a ponta com clipe aprovado e depois câmera real; medir latências por etapa.
+Já feitos em 06/11: contrato com o backend, evento de saída, `backend_client.py`, worker, lifespan e health (ver seção 8).
+
+1. **Milestone 4, treino e medição no Senac**: o código já existe (`tf_models.py`, `training/train_detector.py`, `train_ocr.py`, `evaluate.py`) e está ligado ao `build_pipeline` por `RECOGNITION_MODE=tf`. Falta só rodar o roteiro de [docs/senac.md](docs/senac.md) com o dataset, trazer `models/` (fora do git) com as fichas e `avaliacao.json`, e registrar as métricas aqui. A nota antiga de que não havia código TensorFlow estava desatualizada.
+2. Normalização e validação de formato de placa (Mercosul e formato antigo brasileiro), sem "corrigir" caracteres ambíguos à força; guardar texto cru para diagnóstico. A limpeza atual em `PlateEvent.from_observation` é só para não tomar 400 do backend.
+3. Limiares separados para detecção e OCR, escolhidos com dados reais; avaliação repetível em imagens rotuladas (no Senac).
+4. Tratamento de falha da câmera USB: desconexão já para o worker e deixa `ready` falso; falta decidir se haverá reabertura com backoff curto (só se necessário) e validar com a webcam real (talvez `cv2.CAP_DSHOW` via `capture_factory`; registrar resolução usada).
+5. Opcional no cliente HTTP: respeitar `Retry-After` do 429; avaliar o limite do backend (300 req/15 min por IP) ao medir o volume real de eventos.
+6. README, `.env.example` atualizado (incluir `BACKEND_TIMEOUT` e `BACKEND_MAX_RETRIES`, conferir se já foram adicionados), documentação do contrato e da política de perda de eventos.
+7. **Milestone 9**: teste ponta a ponta com clipe curto aprovado (poucos MB, versionável ou guardado fora do git) e depois câmera real; medir latências por etapa.
+8. Limpezas pendentes do repo (seção 5): import `anyio.Path` em `training/rds.py`, `numpy` em `requirements.txt`, decisão `pyproject.toml` vs `requirements*.txt`.
+9. Backend/Front (outra equipe, só com autorização do usuário): testes da rota `/eventos-alpr`, `.env.example` no Back_park; o Front_Park não referencia `eventos-alpr`.
 
 ## 7. Regras para continuar
 - Ler os arquivos atuais antes de editar; o repo é a fonte da verdade.
@@ -107,3 +121,70 @@ O repo tem um `skills.md` (guia para assistentes de IA). Pontos principais:
 - Não adicionar fila, banco, Redis ou outro framework sem necessidade demonstrada.
 - Não logar credenciais RTSP, frames completos nem placas completas por padrão.
 - Responder em português, de forma direta, explicando o código novo no ponto onde aparece.
+- Usar os agentes e a skill de `.claude/` (`alpr-dev`, `alpr-implementador`, `alpr-modelo`, `alpr-integrador`). Rodar testes com `.venv\Scripts\python -m pytest ... -q` (o `pytest` não está no PATH do terminal).
+
+## 8. Registro de 06/11/2026
+
+**Feito hoje**
+- Contrato do backend levantado (somente leitura) no Back_park pelo `alpr-integrador`; o backend **já está pronto** e não precisou mudar.
+- Passo 2 (cliente HTTPX): `PlateEvent`, `BackendClient`, `Settings.backend_timeout` (padrão 5) e `Settings.backend_max_retries` (padrão 3); 10 testes em `test_backend_client.py` passaram (rodados pelo usuário).
+- Passo 3 (worker, lifespan, health): `worker.py`, `main.py` reescrito, `test_worker.py`, `test_main_health.py`. O agente reportou 9 testes novos passando e suíte completa `132 passed, 1 warning` (warning do TestClient/Starlette sobre httpx).
+- Nada foi commitado ainda nesta data (conferir `git status`).
+
+**Contrato do backend (Back_park, fonte da verdade)**
+- `POST {BACKEND_URL}/eventos-alpr` (sem prefixo `/api`; `routes/index.ts`, `app.ts`).
+- Autenticação: header `X-API-Key` comparado a `ALPR_API_KEY` do servidor (mínimo de 32 caracteres; sha256 + `timingSafeEqual`). Sem a variável no servidor: 503. Chave errada ou ausente: 401.
+- Body JSON camelCase, schema `.strict()` (campo extra = 400): `eventId` (8-64), `cameraId` (1-64), `plateText` (1-20, o backend normaliza para A-Z0-9 maiúsculo), `detectionConfidence` e `ocrConfidence` (0..1), `capturedAt` (ISO 8601 com offset; `Z` serve).
+- Idempotência por `eventId` (`@unique`): novo = 201; repetido = 200 com `duplicado:true`; corrida = 409 (reenviar devolve 200).
+- Outros: 400 `{errors:[{path,message}]}`, 413 acima de 16kb, 429 acima de 300 req/15 min por IP, 500 inesperado. Sem deduplicação por placa/câmera no backend (cabe ao microsserviço).
+
+**Estado atual em uma frase**: o encanamento ponta a ponta existe (câmera -> pipeline -> evento -> backend), mas com detector/OCR fake, então nada é detectado de verdade até o Milestone 4 ser feito.
+
+**Próximo passo imediato**: ver a seção 10 (retomada no Senac).
+
+
+## 9. Registro de 09/11/2026 (itens que não dependem do dataset/Senac)
+
+**Feito**
+- Normalização/validação de placa (`plate_format.py`, já existente) agora está **ligada ao worker**: leitura fora de Mercosul/antigo não é enviada, vira `invalid_plates` (exposto em `/health/ready`) e não loga o texto. Teste novo em `test_worker.py`.
+- Cliente HTTP respeita `Retry-After` do 429 (usa o maior entre ele e o backoff; teto 30s; header inválido é ignorado). 2 testes novos.
+- Limpezas: removido `from anyio import Path` de `training/rds.py` (era sombreado por `pathlib.Path`); `numpy>=1.26` adicionado a `requirements.txt`. Decisão: **sem `pyproject.toml`**, o projeto usa `requirements*.txt`.
+- `.env.example` já tinha `BACKEND_TIMEOUT` e `BACKEND_MAX_RETRIES` (conferido).
+- `README.md` criado (rodar, variáveis, health, contrato, políticas de perda de evento).
+- Suíte: `.venv\Scripts\python -m pytest tests/unit -q` -> 133 passed (+ teste de `invalid_plates` no health ainda não escrito).
+
+**Continua pendente (depende do Senac/hardware)**: Milestone 4 (modelo real), limiares de detecção/OCR com dados reais, webcam USB real (reabertura com backoff e `CAP_DSHOW` só se necessário), Milestone 9 (ponta a ponta), medir volume real versus limite 300 req/15 min.
+**Commitado** em 09/11/2026 (ver `git log`).
+
+### Atualização (mesmo dia): preparação para o Senac
+- `RECOGNITION_MODE` (`fake` padrão | `tf`), `DETECTOR_MODEL_PATH`, `OCR_MODEL_PATH`, `DETECTOR_THRESHOLD`, `OCR_MIN_CONFIDENCE` em `Settings` e `.env.example`. `build_pipeline` carrega `TfPlateDetector`/`TfPlateReader` no modo `tf`; modelo ausente ou corrompido vira `startup_error` e `/health/ready` 503 (worker nem sobe). Teste novo.
+- Pipeline com limiar de OCR separado (`ocr_min_confidence`, padrão = `min_confidence`). Teste novo. Item 3 de 6 fica só dependente de dados.
+- `app/recognition/model_card.py`: ficha JSON ao lado do modelo (sha256, data, versões TF/Keras, params, métricas, tamanho dos conjuntos). Os dois scripts de treino gravam a ficha; o serviço loga sha256/data ao subir. Testes novos.
+- `training/evaluate.py`: avalia no conjunto de teste por tipo/layout (detecção IoU>=0.5, OCR isolado, ponta a ponta, formato válido, ms por etapa) e grava `models/avaliacao.json`. Parte pura (iou, contagens) testada; a parte com modelo roda só no Senac.
+- `docs/senac.md`: roteiro de instalação, treino, avaliação, retorno dos arquivos e uso.
+- Bug achado e corrigido: `OCR_MIN_CONFIDENCE=` vazio no `.env.example` quebrava `Settings`; agora `env_ignore_empty=True` (teste novo).
+- Suíte completa: 143 passed. O código de treino/avaliação com TensorFlow real **não foi executado** aqui (sem dataset/modelo).
+- Pendência: o treino não mede métricas do detector além da perda de validação; `evaluate.py` cobre isso.
+
+
+## 10. Retomada no Senac (ponto de partida)
+
+**Estado**: todo o código que não depende do dataset está pronto, testado (143 passed) e commitado. O que **nunca foi executado** é o código com TensorFlow real: `training/train_detector.py`, `training/train_ocr.py` (com a gravação da ficha adicionada em 09/11) e `training/evaluate.py`. Pode aparecer erro na primeira rodada; corrigir com teste.
+
+**Passo a passo** (detalhes em [docs/senac.md](docs/senac.md)):
+1. `git pull`, criar `.venv`, `pip install -r requirements-dev.txt`, rodar `pytest tests/unit -q` antes de qualquer treino. Anotar versões de Python/TensorFlow/Keras.
+2. Dataset em `data/rodosol/` (fora do git). Treinar: `python -m training.train_detector` e `python -m training.train_ocr` (saem em `models/` com ficha `.json`).
+3. Avaliar: `python -m training.evaluate` -> `models/avaliacao.json` (por carro/moto e Brazilian/Mercosul).
+4. Registrar aqui os números reais (detecção, OCR por placa e por caractere, % formato válido, ms por etapa) e as versões usadas.
+5. Trazer `models/*.keras`, as fichas e `avaliacao.json` para a máquina de desenvolvimento (fora do git); conferir o sha256.
+
+**Decisões que dependem desses números**
+- `MIN_CONFIDENCE`, `DETECTOR_THRESHOLD`, `OCR_MIN_CONFIDENCE` (hoje 0.6 / 0.5 / vazio, provisórios).
+- Se `e2e_formato_valido` ficar baixo em algum grupo (moto de duas linhas, Mercosul): decidir se treina mais, ajusta o recorte/pré-processamento ou aceita a perda. **Não** corrigir caracteres ambíguos à força.
+- O detector foi treinado com frames 1280x720 reduzidos a 384 de largura; a webcam real pode ter outra resolução e proporção.
+
+**Depois do Senac** (nesta ordem): trocar `RECOGNITION_MODE=tf` e rodar com um clipe curto aprovado (Milestone 9); webcam USB real (reabertura com backoff e `cv2.CAP_DSHOW` só se necessário; registrar a resolução); medir volume de eventos contra o limite de 300 req/15 min do backend; medir latência por etapa.
+
+**Pendências de outras equipes (só com autorização)**: testes da rota `/eventos-alpr` e `.env.example` no Back_park; o Front_Park não referencia `eventos-alpr`.
+
+**Commits**: sem `Co-Authored-By` (pedido do usuário); autor é o usuário (`dasilva-thiago`).

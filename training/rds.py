@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 
-from anyio import Path
-
 from app.schemas.recognition import BoundingBox
 
 from pathlib import Path

@@ -10,6 +10,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from app.recognition.model_card import write_card
 from app.recognition.preprocessing import crop_region
 from app.recognition.tf_models import ALPHABET, OCR_PATH, PLATE_LENGTH, ocr_input
 from app.schemas.recognition import BoundingBox
@@ -116,7 +117,7 @@ def main() -> None:
         loss="sparse_categorical_crossentropy",
         metrics=["accuracy"],  # acerto por caractere
     )
-    modelo.fit(
+    historico = modelo.fit(
         treino,
         validation_data=(x_va, y_va),
         epochs=args.epochs,
@@ -125,7 +126,15 @@ def main() -> None:
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     modelo.save(args.out)
-    print("Salvo em", args.out)
+    write_card(
+        args.out,
+        "ocr",
+        params={"per_folder": args.per_folder, "epochs": args.epochs, "seed": SEED},
+        metrics={"train_char_accuracy": float(historico.history["accuracy"][-1]),
+                 "val_char_accuracy": float(historico.history["val_accuracy"][-1])},
+        dataset={"train": len(x_tr), "val": len(x_va)},
+    )
+    print("Salvo em", args.out, "(ficha:", args.out.with_suffix(".json"), ")")
 
 
 if __name__ == "__main__":

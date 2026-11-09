@@ -122,3 +122,11 @@ def test_stream_com_deduplicador_reporta_a_mesma_placa_uma_so_vez():
         deduplicator=Deduplicator(30, clock=RelogioFalso()),
     )
     assert len(list(pipeline.process_stream([frame()] * 3))) == 1
+
+def test_limiar_do_ocr_separado_do_da_deteccao():
+    det = FakePlateDetector([PlateDetection(BoundingBox(x=2, y=2, width=10, height=10), 0.9)])
+    leitor = FakePlateReader(PlateReading("ABC1D23", 0.7))
+    img = np.zeros((20, 20, 3), np.uint8)
+    assert RecognitionPipeline(det, leitor, "c", 0.6).process_frame(img, AGORA)  # 0.7 >= 0.6
+    sem_ocr = RecognitionPipeline(det, leitor, "c", 0.6, ocr_min_confidence=0.8)
+    assert not sem_ocr.process_frame(img, AGORA)
