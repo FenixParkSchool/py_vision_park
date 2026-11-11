@@ -259,3 +259,29 @@ Já feitos em 06/11: contrato com o backend, evento de saída, `backend_client.p
 - Cuidado ao ler `e2e_formato_valido` (0.974, igual à detecção): ele só diz que o texto tem a forma de uma placa (3 letras + dígitos). O OCR é um classificador por posição e aprende cedo "letra ou dígito" em cada posição, então o formato sai válido mesmo com caracteres errados. **Formato válido não significa leitura correta.** (Explicação plausível, não verificada.)
 
 **Próximo passo (11/11)**: OCR completo `--per-folder 1500 --epochs 15`. Estimativa revisada com o tempo medido: 12 000 imagens de treino -> ~146 s por época -> **~35 a 40 min**. Depois `training.evaluate` completo (500 imagens levaram 1,5 min; o conjunto inteiro de teste, ainda não medido, deve levar bem mais). Se a acurácia do OCR continuar baixa com o treino completo, considerar mais dados/épocas ou trocar a arquitetura para CTC (decisão a tomar com os números, não antes).
+
+
+## 13. Guia para a próxima sessão (escrito em 10/11/2026, 22:xx)
+
+**Onde estamos em uma frase**: encanamento ponta a ponta pronto e testado; detector treinado e bom (97,4% de detecção em 500 imagens); **OCR ainda ruim** (modelo rápido de teste, 13% por caractere). Falta treinar o OCR completo, avaliar tudo, decidir limiares e testar com webcam.
+
+**Ao abrir a sessão (computador do Senac, onde estão o dataset e `models/`)**
+1. `cd py_vision_park`; `git status -sb` (este repo está **2 commits à frente** da origem: `987fae1`, `785c3c8`; nenhum push feito).
+2. `.venv\Scripts\python -m pytest tests/unit -q` -> esperado 141 passed.
+3. Conferir `models/`: `detector.keras/.json` (sha256 `57be8512...`), `ocr.keras/.json` (modelo **rápido**, sha256 `9aaccac3...`, será sobrescrito), `avaliacao.json` (da avaliação rápida), `anteriores_05-11/` (modelos antigos sem ficha; descartáveis).
+4. OCR completo: `.venv\Scripts\python -m training.train_ocr --per-folder 1500 --epochs 15 > logs\train_ocr.log` (estimativa 35-40 min, ~146 s/época; confirmar na 1ª época).
+5. Avaliação completa: `.venv\Scripts\python -m training.evaluate` (sem `--limit`; tempo ainda não medido, 500 imagens levaram 1,5 min).
+6. Registrar números aqui (substituir a tabela "rápida" por uma completa) e decidir `MIN_CONFIDENCE`, `DETECTOR_THRESHOLD`, `OCR_MIN_CONFIDENCE`.
+7. Se o OCR completo ainda for fraco (por exemplo < 80% por caractere): decidir entre mais dados/épocas ou trocar para CTC. Não corrigir caracteres ambíguos à força.
+8. Depois: `RECOGNITION_MODE=tf` no `.env` (ver `.env.example`; variáveis `CAMERA_SOURCE`, `BACKEND_URL`, `BACKEND_API_KEY`, `DETECTOR_MODEL_PATH`, `OCR_MODEL_PATH`), clipe curto, webcam USB (`CAMERA_SOURCE=0`; `cv2.CAP_DSHOW` e reabertura com backoff só se necessário; registrar resolução), volume vs limite de 300 req/15 min do backend, latência por etapa (referência: detector 48 ms + OCR 39 ms por imagem em CPU).
+
+**Backend (Back_park, outra equipe)**
+- `POST /eventos-alpr` com `X-API-Key` existe e foi verificado em 09/11 (seção 11). O `BACKEND_API_KEY` do py_vision_park deve ser **igual** ao `ALPR_API_KEY` do Back_park (mínimo 32 caracteres; nunca commitar nem colar em chat).
+- Em 10/11 o Back_park local estava em `main`, **1 commit atrás** da origem (`git pull` antes de testar). A tabela `evento_alpr` existe no Neon.
+- Aviso à equipe (resolvido em 05/11): login/cadastro davam 500 por `contract.json` desatualizado (`usuario.status` inexistente no banco). Regra: após mudar `contract.prisma` ou rodar `contract infer`, rodar `npx prisma contract emit`, reiniciar e commitar os três arquivos `contract.*` juntos. Quem não conseguir rodar o servidor: conferir `.env` (copiar de `.env.example`), `git pull`, `npm install`.
+- Diferença conhecida entre o banco e o contrato antigo: tabela `movimentacao` existe; `visitante.telefone` e `veiculo_visitante.placa` sem unicidade; `reserva_vaga.placa_reserva` aceita nulo. Alinhar com a equipe.
+- Não editar backend/frontend sem autorização do usuário.
+
+**Apresentação do PI (Senac)**: versão curta e formatada para celular foi entregue no chat (OpenCV captura/prepara a imagem; TensorFlow detecta a placa e faz o OCR; Python valida e envia por HTTPX). Atualizar com os números reais depois da avaliação completa; **não apresentar números do OCR rápido como resultado**. Dataset: 20 000 imagens (4 pastas x 5 000: cars-br, cars-me, motorcycles-br, motorcycles-me).
+
+**Regras de trabalho do usuário (manter)**: explicar conceitos novos de forma curta; marcar `DEPENDE DO BACKEND` e `SUPOSIÇÃO` quando couber; commits e push só com as credenciais do usuário (`dasilva-thiago`), **sem Co-Authored-By**; nunca afirmar que testou o que não rodou; modelos e dataset ficam fora do git.
