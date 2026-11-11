@@ -239,3 +239,23 @@ Já feitos em 06/11: contrato com o backend, evento de saída, `backend_client.p
 - sha256: `57be8512298ca18b755e2eb53213442db8beb13419e84dcc82f8ddb2e0076673`. Conjuntos: 4800 treino / 200 validação. Largura de entrada 384.
 - Perda final: treino 0.0105, validação 0.0090 (a menor validação vista foi 0.0079, na época 9). **Isso é só perda de treino, não é taxa de detecção**: a taxa real (IoU>=0.5) só sai do `training.evaluate`, ainda não rodado.
 - Tempo de referência para o OCR: o detector levou ~20 min com 2400 imagens por época-base; o OCR (`--per-folder 1500 --epochs 15`) usa mais imagens e épocas, então reservar bem mais que isso (não medido).
+
+### OCR rápido e avaliação rápida (10/11/2026, 21:49 a 22:00)
+**Isto é só teste de funcionamento do pipeline; o OCR NÃO está bom e não deve ser apresentado como resultado.**
+- OCR: `python -m training.train_ocr --per-folder 400 --epochs 8` (3200 treino / 400 validação). **9 min**, ~39 s por época. Acurácia por caractere: treino 0.299, **validação 0.152** (chance ao acaso ≈ 0.03). sha256 `9aaccac3eb53da06bd490a2baf7c7f260ae7baa3840401fc3cfd3a35f6418ca6` (`models/ocr.keras` + `models/ocr.json`). Ainda estava aprendendo (a acurácia subia a cada época); o treino foi curto demais.
+- Avaliação: `python -m training.evaluate --limit 500` (125 imagens por grupo). **1,5 min**. Resultado em `models/avaliacao.json` e `logs/evaluate_rapido.log`.
+
+| Grupo | Detecção (IoU>=0.5) | OCR por caractere | Placa inteira |
+|---|---|---|---|
+| car/Brazilian | 0.936 | 0.103 | 0.0 |
+| car/Mercosur | 0.984 | 0.128 | 0.0 |
+| motorcycle/Brazilian | 0.984 | 0.136 | 0.0 |
+| motorcycle/Mercosur | 0.992 | 0.162 | 0.0 |
+| **todos (500)** | **0.974** | **0.132** | **0.0** |
+
+- Tempo por imagem (CPU): detector 47,7 ms, OCR 38,8 ms.
+- **Detector: bom** (97,4% com IoU>=0.5 em 500 imagens do conjunto de teste; só 500 de 20 000, então a margem de erro é ampla).
+- **OCR: ruim, esperado para 8 épocas.** Nenhuma placa inteira acertada.
+- Cuidado ao ler `e2e_formato_valido` (0.974, igual à detecção): ele só diz que o texto tem a forma de uma placa (3 letras + dígitos). O OCR é um classificador por posição e aprende cedo "letra ou dígito" em cada posição, então o formato sai válido mesmo com caracteres errados. **Formato válido não significa leitura correta.** (Explicação plausível, não verificada.)
+
+**Próximo passo (11/11)**: OCR completo `--per-folder 1500 --epochs 15`. Estimativa revisada com o tempo medido: 12 000 imagens de treino -> ~146 s por época -> **~35 a 40 min**. Depois `training.evaluate` completo (500 imagens levaram 1,5 min; o conjunto inteiro de teste, ainda não medido, deve levar bem mais). Se a acurácia do OCR continuar baixa com o treino completo, considerar mais dados/épocas ou trocar a arquitetura para CTC (decisão a tomar com os números, não antes).
