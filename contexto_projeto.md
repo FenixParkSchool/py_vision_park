@@ -214,3 +214,28 @@ Já feitos em 06/11: contrato com o backend, evento de saída, `backend_client.p
 - Resultado: criados `ADMIN` (id 7), `VIGILANTE` (8) e `FUNCIONARIO` (9). Usuários movidos: 2, 2 e 31 (total 35 conferido). Os tipos antigos (`Administrador` 2, `Funcionario` 1, `Vigilante` 3) continuam na tabela, **sem usuários**; podem ser apagados depois. Para desfazer: mover os usuários de volta para os ids 2, 1 e 3.
 - `npm test` do Back_park: 13/13 passam; nenhum usuário de teste sobrou.
 - Pendências restantes do ALPR: treino/avaliação no Senac; depois webcam e latências.
+
+
+## 12. Registro de 10/11/2026 (Senac): treino iniciado, restante para 11/11
+
+**Ambiente**: Python 3.11.17, TensorFlow 2.21.0, Keras 3.15.1, CPU (sem GPU), 8 núcleos. Dataset em `data/rodosol/` completo: 4 pastas x 5000 imagens (cars-br, cars-me, motorcycles-br, motorcycles-me). `pytest tests/unit -q`: **141 passed** (a seção 9 citava 143; diferença não investigada).
+
+**Feito hoje**
+- Modelos antigos de 05/11 (sem ficha `.json`, origem de um treino exploratório) movidos para `models/anteriores_05-11/` (fora do git). Não usar como resultado oficial.
+- Detector: `python -m training.train_detector --per-folder 600 --epochs 12`, log em `logs/train_detector.log` (ignorado pelo git). Cerca de 100 s por época. Resultado: ver "Resultado do detector" abaixo.
+
+**Falta (fazer em 11/11, nesta ordem, no mesmo computador do Senac)**
+1. Se o detector não gravou `models/detector.keras` + ficha `.json`, repetir o passo (ver log).
+2. OCR: `.venv\Scripts\python -m training.train_ocr --per-folder 1500 --epochs 15 > logs\train_ocr.log` (tempo ainda desconhecido; esperar pelo menos o equivalente ao detector, ~20 min ou mais). Para um teste rápido antes: `--per-folder 400 --epochs 8`.
+3. Avaliar: `.venv\Scripts\python -m training.evaluate` (ou `--limit 500` primeiro) -> `models/avaliacao.json`.
+4. Registrar aqui os números reais (detecção IoU>=0.5, OCR por placa e por caractere, % formato válido, ms por etapa; por carro/moto e Brazilian/Mercosul) e decidir `MIN_CONFIDENCE`, `DETECTOR_THRESHOLD`, `OCR_MIN_CONFIDENCE` com base neles.
+5. `RECOGNITION_MODE=tf` no `.env` e rodar com um clipe curto (Milestone 9); depois webcam USB real, volume de eventos vs limite de 300 req/15 min, latência por etapa.
+6. Backend: o `BACKEND_API_KEY` do `.env` do py_vision_park deve ser igual ao `ALPR_API_KEY` do Back_park.
+
+**Atenção**: o código de treino/avaliação com TensorFlow real é rodado pela primeira vez nesta data; erros na primeira execução do OCR ou do `evaluate` são esperados e devem ser corrigidos com teste.
+
+### Resultado do detector (10/11/2026, concluído às 21:46)
+- Comando: `python -m training.train_detector --per-folder 600 --epochs 12`, 12 épocas, ~100 s cada (~20 min no total, CPU). Saída: `models/detector.keras` + `models/detector.json` (fora do git).
+- sha256: `57be8512298ca18b755e2eb53213442db8beb13419e84dcc82f8ddb2e0076673`. Conjuntos: 4800 treino / 200 validação. Largura de entrada 384.
+- Perda final: treino 0.0105, validação 0.0090 (a menor validação vista foi 0.0079, na época 9). **Isso é só perda de treino, não é taxa de detecção**: a taxa real (IoU>=0.5) só sai do `training.evaluate`, ainda não rodado.
+- Tempo de referência para o OCR: o detector levou ~20 min com 2400 imagens por época-base; o OCR (`--per-folder 1500 --epochs 15`) usa mais imagens e épocas, então reservar bem mais que isso (não medido).
