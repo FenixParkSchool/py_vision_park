@@ -310,3 +310,22 @@ Já feitos em 06/11: contrato com o backend, evento de saída, `backend_client.p
 1. **Melhorar o OCR** antes de apresentar como "lê placas": mais dados (`--per-folder` maior, até 5000 por pasta = 20 000), mais épocas (a curva ainda subia), e/ou trocar a arquitetura para CTC. Ordem sugerida: primeiro dados + épocas (mesma arquitetura, ~1 h+), medir de novo; só trocar para CTC se não chegar perto de 95% por caractere. Reservar o `evaluate` completo depois (~10 min).
 2. **Limiares** (`MIN_CONFIDENCE`, `DETECTOR_THRESHOLD`, `OCR_MIN_CONFIDENCE`): ainda provisórios (0.6 / 0.5 / vazio). O `evaluate` não mede acerto por faixa de confiança; para escolher o corte com dados, é preciso estender o `evaluate` para gravar a confiança de cada leitura e se estava certa (curva acerto x cobertura). Não escolher no chute.
 3. Como a política do serviço é enviar só placas com formato válido e confiança suficiente, vale medir quantas leituras **erradas** passam pelo filtro (placas erradas gravadas no banco são pior que placas não lidas).
+
+
+## 15. Diagnóstico do OCR (12/11/2026, 20:08; `experiments/diagnostico_ocr.py`, ~1 min)
+Lê o recorte do **gabarito** (só o OCR), 800 imagens de treino e 800 de teste, sem augmentação. Saída em `logs/diagnostico_ocr.json`; mosaico do que o OCR enxerga em `logs/mosaico_ocr.png`.
+
+**Medido**
+- **Treino 88,0% por caractere (50% placa inteira) x teste 82,4% (31,6%)**. A diferença é pequena: o modelo **ainda não aprendeu nem o treino** (subajuste). Mais treino/capacidade deve subir os dois; mais dados sozinho ajuda menos.
+- O split tem 12 000 treino / 4 000 val / 4 000 teste; o treino usou só **6 000** (`--per-folder 1500`) x 2 recortes. Há mais 6 000 disponíveis.
+- **Erros não são de tipo** (letra no lugar de dígito: 3 de 987). São **confusões entre formas parecidas**: 4/1, 7/1, L/M, H/M, K/M, N/M, D/O, Q/O, I/J, E/F.
+- **Posição 3 (índice 2) é a pior: 53,5% no teste** (69% no treino); as demais ficam entre 79% e 95%. Causa **não confirmada** (hipótese: caractere ao lado do hífen nas placas brasileiras e corte do recorte de moto).
+- Placas por nº de erros (teste): 0 erros 253, **1 erro 275**, 2 erros 157, 3+ 115 (de 800). Um terço das placas erra só 1 caractere.
+- Confiança mínima média: placa certa 0,49 x placa errada 0,33 (há separação, mas fraca; não escolher limiar sem curva acerto x cobertura).
+- Por grupo (caractere, teste): car/Brazilian 76,6%, car/Mercosur 85,1%, moto/Brazilian 85,3%, moto/Mercosur 82,5%.
+
+**Observado nas imagens**: os recortes são **muito borrados** (placa pequena no frame; letras como E/F e 1/4/7 ficam quase indistinguíveis a olho). Em moto, o pré-processamento junta as duas linhas lado a lado e parte das letras da linha de cima aparece cortada. Há um teto de qualidade imposto pela resolução da fonte.
+
+**Estimativa (NÃO medida) para treino maior** (12 000 imagens, ~35 épocas, mesma arquitetura): por caractere teste ~88-90%, placa inteira isolada ~40-50%, ponta a ponta ~35-45%. Chegar a 95% por caractere (placa inteira ~70%) provavelmente exige mudar entrada/arquitetura (mais resolução, mais capacidade) e não é garantido pela qualidade das imagens. Placa inteira ≈ (acerto por caractere)^7, com um pouco de folga pela correlação dos erros.
+
+**Mitigação de maior alavanca (hipótese a medir): votação entre vários frames.** Um carro aparece em vários frames da webcam; combinar as leituras (voto por posição ou maior confiança) tende a corrigir erros aleatórios de borrão. **Atenção ao desenho atual**: a deduplicação deixa passar a **primeira** leitura e bloqueia o mesmo (câmera, placa) por 30 s; se a primeira leitura estiver errada, vira a placa errada gravada. Como a leitura errada gera outra "placa" diferente, ela também passa; o resultado é eventos duplicados e errados. Revisar isso (agregar leituras por veículo antes de enviar) é decisão de projeto pendente.
