@@ -329,3 +329,21 @@ Lê o recorte do **gabarito** (só o OCR), 800 imagens de treino e 800 de teste,
 **Estimativa (NÃO medida) para treino maior** (12 000 imagens, ~35 épocas, mesma arquitetura): por caractere teste ~88-90%, placa inteira isolada ~40-50%, ponta a ponta ~35-45%. Chegar a 95% por caractere (placa inteira ~70%) provavelmente exige mudar entrada/arquitetura (mais resolução, mais capacidade) e não é garantido pela qualidade das imagens. Placa inteira ≈ (acerto por caractere)^7, com um pouco de folga pela correlação dos erros.
 
 **Mitigação de maior alavanca (hipótese a medir): votação entre vários frames.** Um carro aparece em vários frames da webcam; combinar as leituras (voto por posição ou maior confiança) tende a corrigir erros aleatórios de borrão. **Atenção ao desenho atual**: a deduplicação deixa passar a **primeira** leitura e bloqueia o mesmo (câmera, placa) por 30 s; se a primeira leitura estiver errada, vira a placa errada gravada. Como a leitura errada gera outra "placa" diferente, ela também passa; o resultado é eventos duplicados e errados. Revisar isso (agregar leituras por veículo antes de enviar) é decisão de projeto pendente.
+
+
+## 16. Diagnóstico aprofundado e decisão (12/11/2026, Opus 5.5)
+
+**Medido**
+- **Viés regional**: posições 1 e 2 têm poucas letras dominantes (pos1: O/Q/M = 72%; pos2: R/P/D = 63%; placas do ES). A pos3 é uniforme (26 letras, 4,57 bits). Acerto por posição no teste (recorte do gabarito): pos3 = **0.48 / 0.62 / 0.57 / 0.46** (car-BR / car-ME / moto-BR / moto-ME). Ou seja, a **capacidade real de ler letras é ~55%**; pos1/pos2 parecem boas porque o modelo decorou o viés. Em outra região (fora do ES) pos1/pos2 devem cair.
+- **Resolução não é o gargalo principal**: placa de carro tem ~125x42 px no original (p10 95x32), quase o tamanho da entrada do OCR (128x48). Moto ~103x89.
+- **Ruído de rótulo no treino**: o palpite carro/moto por proporção (`CAR_MIN_ASPECT=2.0`) acerta 100% com a caixa do gabarito, mas erra **~5% dos carros** com a caixa tremida usada no treino (`jitter_box`), que viram "moto" e são cortados ao meio com o rótulo certo. Proporção: carro p5 2,53; moto p95 1,33.
+- O treino salva a **última** época, não a melhor; não há parada antecipada.
+
+**Referência externa** (não medido por nós): no artigo original do RodoSol-ALPR (Laroca et al., 2022, arXiv 2201.00267), 12 modelos de OCR tiveram **média ~50,8%** de reconhecimento neste dataset (divisão tradicional; números por modelo não conferidos). Um artigo de 2026 (arXiv 2601.07671) reporta OpenALPR 69,3% e Sighthound 57,0% no RodoSol. O dataset é difícil de propósito. **Alvo realista: 50-70% de placa inteira**, não 95%.
+
+**Decisão (ordem)**
+1. Correções baratas: no treino usar o tipo de veículo do gabarito (não o palpite); `CAR_MIN_ASPECT` revisto com dados para a inferência; parada antecipada e salvar a melhor época (val_loss).
+2. Medir honesto: `evaluate` passa a mostrar acerto por posição (pos3 = leitura real de letra).
+3. Trocar o OCR por **CRNN com CTC** (convolucional, sem LSTM para caber em CPU), mantendo o atual como `--arch positions` para comparação. Motivo: o atual (Flatten + Dense, 7 saídas fixas) precisa decorar onde cada caractere fica, e carro/moto têm posições diferentes; CTC lê da esquerda para a direita sem posição fixa e é o padrão para texto em imagem.
+4. Teste rápido do CTC (400/pasta, 8 épocas, ~10 min) para garantir que aprende; depois treino com todas as 12 000 imagens de treino e parada antecipada; `evaluate` completo e comparação com a seção 14.
+5. Adiado: votação entre frames (só mede com vídeo/webcam; o RodoSol tem uma imagem por veículo) e modelo pré-treinado de terceiros (ex.: fast-plate-ocr; licença e cobertura de placas brasileiras **não verificadas**).
