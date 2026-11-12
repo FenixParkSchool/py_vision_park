@@ -1,7 +1,7 @@
 import pytest
 
 from app.schemas.recognition import BoundingBox
-from training.evaluate import Record, char_hits, iou, summarize
+from training.evaluate import Record, char_hits, iou, position_hits, summarize
 
 
 def test_iou():
@@ -32,3 +32,20 @@ def test_summarize_por_grupo_e_total():
     assert r["motorcycle/Brazilian"]["deteccao"] == 0.0
     assert r["motorcycle/Brazilian"]["e2e_placa_inteira"] == 0.0
     assert r["todos"]["n"] == 3
+
+
+def test_position_hits_comprimento_diferente_conta_erro():
+    assert position_hits("ABC1D23", "ABC1D23") == [1] * 7
+    assert position_hits("ABCID23", "ABC1D23") == [1, 1, 1, 0, 1, 1, 1]
+    assert position_hits("ABC", "ABC1D23") == [1, 1, 1, 0, 0, 0, 0]
+    assert position_hits(None, "ABC1D23") == [0] * 7
+
+
+def test_summarize_por_posicao():
+    recs = [
+        Record("car/Mercosul", "ABC1D23", True, 0.9, "ABC1D23", "ABC1D23"),
+        Record("car/Mercosul", "ABC1D23", True, 0.8, "ABCID23", None),
+    ]
+    m = summarize(recs)["car/Mercosul"]
+    assert m["ocr_por_posicao"] == [1, 1, 1, 0.5, 1, 1, 1]
+    assert m["e2e_por_posicao"] == [0.5] * 7

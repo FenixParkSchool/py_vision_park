@@ -6,7 +6,7 @@ Contrato de entrada/saída (vale para treino e inferência; o treino importa est
 - Normalização: pixel / 255 -> float32 em [0, 1], formato (lote, altura, largura, 1).
 - Detector: rede totalmente convolucional que devolve um mapa de probabilidade
   "isto é placa" com 1/4 da resolução da entrada. Caixas saem dos componentes conexos.
-- OCR: 7 classificadores (um por posição) sobre o alfabeto 0-9A-Z.
+- OCR: `positions` (7 classificadores, saída (7, 36)) ou `ctc` (CRNN, saída (T, 37), blank = último).
 
 TensorFlow só é importado em `from_file`, nunca na importação deste módulo.
 """
@@ -89,9 +89,13 @@ def mask_to_detections(
     return deteccoes
 
 
-def ocr_input(crop: np.ndarray) -> np.ndarray:
-    """Recorte BGR da placa -> tensor (1, 48, 128, 1) em [0, 1]."""
-    pronto = prepare_plate(crop, guess_vehicle_type(crop))
+def ocr_input(crop: np.ndarray, vehicle_type: str | None = None) -> np.ndarray:
+    """Recorte BGR da placa -> tensor (1, 48, 128, 1) em [0, 1].
+
+    Com `vehicle_type` (treino: vem do gabarito) usa-o; sem ele, faz o palpite por proporção
+    (inferência: continua com `guess_vehicle_type`, `CAR_MIN_ASPECT` não foi alterado).
+    """
+    pronto = prepare_plate(crop, vehicle_type or guess_vehicle_type(crop))
     return (to_gray(pronto).astype(np.float32) / 255.0)[None, :, :, None]
 
 
@@ -103,6 +107,31 @@ def decode_positions(probs: np.ndarray) -> PlateReading:
     texto = "".join(ALPHABET[i] for i in indices)
     confianca = float(probs[np.arange(PLATE_LENGTH), indices].min())
     return PlateReading(text=texto, confidence=confianca)
+
+
+def decode_ctc(probs: np.ndarray) -> PlateReading | None:
+    """Probabilidades (T, 37) -> texto cru por decodificação gulosa (blank = último índice).
+
+    Argmax por passo, junta repetidos consecutivos, tira o blank. Confiança = menor
+    probabilidade máxima entre os passos que emitiram caractere. Sem caractere -> None.
+    """
+    if probs.ndim != 2 or probs.shape[1] != len(ALPHABET) + 1:
+        raise ValueError(f"Saída do OCR com formato inesperado: {probs.shape}")
+    blank = len(ALPHABET)
+    indices = probs.argmax(axis=1)
+    maximos = probs.max(axis=1)
+    letras: list[str] = []
+    confs: list[float] = []
+    anterior = -1
+    for i, p in zip(indices, maximos):
+        if i != anterior and i != blank:
+            letras.append(ALPHABET[i])
+        if i != blank:
+            confs.append(float(p))
+        anterior = i
+    if not letras:
+        return None
+    return PlateReading(text="".join(letras), confidence=min(confs))
 
 
 def _load_predict(path: Path) -> Predict:
@@ -150,4 +179,7 @@ class TfPlateReader:
     def read(self, crop: np.ndarray) -> PlateReading | None:
         if crop.ndim != 3 or crop.shape[0] < 2 or crop.shape[1] < 2:
             return None
-        return decode_positions(self._predict(ocr_input(crop))[0])
+        probs = self._predict(ocr_input(crop))[0]
+        if probs.shape == (PLATE_LENGTH, len(ALPHABET)):
+            return decode_positions(probs)
+        return decode_ctc(probs)

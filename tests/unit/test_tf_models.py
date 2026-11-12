@@ -9,6 +9,7 @@ from app.recognition.tf_models import (
     PLATE_LENGTH,
     TfPlateDetector,
     TfPlateReader,
+    decode_ctc,
     decode_positions,
     detector_input,
     mask_to_detections,
@@ -125,3 +126,52 @@ def test_importar_modulo_nao_carrega_tensorflow():
     codigo = "import sys, app.recognition.tf_models; print('tensorflow' in sys.modules)"
     saida = subprocess.run([sys.executable, "-c", codigo], capture_output=True, text=True, check=True)
     assert saida.stdout.strip() == "False"
+
+
+def ctc_probs(passos: list[tuple[int | None, float]]) -> np.ndarray:
+    """Cada passo = (índice do caractere ou None para blank, probabilidade)."""
+    n = len(ALPHABET) + 1
+    saida = np.full((len(passos), n), 0.0, np.float32)
+    for t, (i, p) in enumerate(passos):
+        i = n - 1 if i is None else i
+        saida[t, :] = (1 - p) / (n - 1)
+        saida[t, i] = p
+    return saida
+
+
+def test_decode_ctc_colapsa_repetidos_e_remove_blank():
+    a, b = ALPHABET.index("A"), ALPHABET.index("B")
+    leitura = decode_ctc(ctc_probs([(a, 0.9), (a, 0.8), (None, 0.99), (a, 0.7), (b, 0.95), (None, 0.9)]))
+    assert leitura.text == "AAB"  # blank separa A repetido
+    assert leitura.confidence == pytest.approx(0.7)
+
+
+def test_decode_ctc_confianca_e_minimo_dos_passos_emitidos():
+    a, b = ALPHABET.index("A"), ALPHABET.index("B")
+    leitura = decode_ctc(ctc_probs([(a, 0.9), (None, 0.3), (b, 0.6)]))
+    assert leitura.text == "AB"
+    assert leitura.confidence == pytest.approx(0.6)
+
+
+def test_decode_ctc_so_blank_devolve_none():
+    assert decode_ctc(ctc_probs([(None, 0.9)] * 5)) is None
+
+
+def test_decode_ctc_formato_errado_levanta_erro():
+    with pytest.raises(ValueError):
+        decode_ctc(np.zeros((8, len(ALPHABET))))
+
+
+def test_ocr_input_com_tipo_explicito_ignora_o_palpite():
+    largo = np.zeros((20, 130, 3), np.uint8)
+    largo[:10] = 255  # metade de cima branca
+    como_carro = ocr_input(largo)
+    como_moto = ocr_input(largo, "motorcycle")
+    assert not np.array_equal(como_carro, como_moto)
+    assert np.array_equal(como_carro, ocr_input(largo, "car"))
+
+
+def test_reader_detecta_saida_ctc():
+    a = ALPHABET.index("A")
+    leitor = TfPlateReader(lambda x: ctc_probs([(a, 0.9), (None, 0.9)] + [(None, 0.9)] * 30)[None])
+    assert leitor.read(np.zeros((40, 120, 3), np.uint8)).text == "A"

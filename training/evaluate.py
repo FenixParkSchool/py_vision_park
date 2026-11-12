@@ -45,6 +45,12 @@ def char_hits(pred: str | None, true: str) -> int:
     return sum(p == t for p, t in zip(pred, true))
 
 
+def position_hits(pred: str | None, true: str) -> list[int]:
+    """1/0 por posição do gabarito; texto ausente ou posição sem par = erro."""
+    pred = pred or ""
+    return [int(i < len(pred) and pred[i] == c) for i, c in enumerate(true)]
+
+
 @dataclass(frozen=True)
 class Record:
     group: str  # ex.: "car/Mercosul"
@@ -68,12 +74,22 @@ def summarize(records: list[Record]) -> dict[str, dict]:
     saida: dict[str, dict] = {}
     for nome, lista in sorted(grupos.items()):
         n = len(lista)
+
+        def por_posicao(campo: str) -> list[float]:
+            tot = [0] * 7
+            for r in lista:
+                for i, h in enumerate(position_hits(getattr(r, campo), r.plate)[:7]):
+                    tot[i] += h
+            return [taxa(t, n) for t in tot]
+
         saida[nome] = {
             "n": n,
             "deteccao": taxa(sum(r.detected for r in lista), n),
             "ocr_placa_inteira": taxa(sum(r.gt_text == r.plate for r in lista), n),
             "ocr_por_caractere": taxa(sum(char_hits(r.gt_text, r.plate) for r in lista), n * 7),
+            "ocr_por_posicao": por_posicao("gt_text"),
             "e2e_placa_inteira": taxa(sum(r.e2e_text == r.plate for r in lista), n),
+            "e2e_por_posicao": por_posicao("e2e_text"),
             "e2e_formato_valido": taxa(
                 sum(bool(r.e2e_text) and normalize_plate(r.e2e_text).is_valid for r in lista), n
             ),
