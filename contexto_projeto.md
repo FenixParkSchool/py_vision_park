@@ -285,3 +285,28 @@ Já feitos em 06/11: contrato com o backend, evento de saída, `backend_client.p
 **Apresentação do PI (Senac)**: versão curta e formatada para celular foi entregue no chat (OpenCV captura/prepara a imagem; TensorFlow detecta a placa e faz o OCR; Python valida e envia por HTTPX). Atualizar com os números reais depois da avaliação completa; **não apresentar números do OCR rápido como resultado**. Dataset: 20 000 imagens (4 pastas x 5 000: cars-br, cars-me, motorcycles-br, motorcycles-me).
 
 **Regras de trabalho do usuário (manter)**: explicar conceitos novos de forma curta; marcar `DEPENDE DO BACKEND` e `SUPOSIÇÃO` quando couber; commits e push só com as credenciais do usuário (`dasilva-thiago`), **sem Co-Authored-By**; nunca afirmar que testou o que não rodou; modelos e dataset ficam fora do git.
+
+
+## 14. Registro de 12/11/2026: OCR completo e avaliação completa (Senac)
+
+**Treino do OCR**: `python -m training.train_ocr --per-folder 1500 --epochs 15` (12 000 treino / 400 validação), 19:09 a 19:49, **~40 min** (144 s por época), confirmando a estimativa. Acurácia por caractere na validação: 0.13 -> 0.81 (época 15), ainda subindo devagar (0.77 na época 10, 0.81 na 15). sha256 `2c7e6c51d94147a398f63a0253d37ad2897cfbd9cf33ea3eb77fd71cf19e96f9` (`models/ocr.keras` + `ocr.json`). O OCR rápido de 10/11 foi guardado em `models/anteriores_05-11/ocr_rapido.*`.
+
+**Avaliação completa**: `python -m training.evaluate` em **4 000 imagens** (1 000 por grupo), ~10 min (19:50 a 20:00). Arquivo: `models/avaliacao.json`, log `logs/evaluate.log` (a avaliação rápida de 10/11 está em `models/anteriores_05-11/avaliacao_rapida.json`).
+
+| Grupo | n | Detecção | OCR por caractere | OCR placa inteira | Ponta a ponta (placa inteira) |
+|---|---|---|---|---|---|
+| car/Brazilian | 1000 | 0.926 | 0.759 | 0.203 | 0.149 |
+| car/Mercosur | 1000 | 0.986 | 0.837 | 0.337 | 0.278 |
+| motorcycle/Brazilian | 1000 | 0.986 | 0.855 | 0.379 | 0.361 |
+| motorcycle/Mercosur | 1000 | 0.967 | 0.846 | 0.293 | 0.229 |
+| **todos** | **4000** | **0.966** | **0.824** | **0.303** | **0.254** |
+
+- Tempo médio por imagem (CPU): detector 50,6 ms, OCR 41,2 ms (~92 ms no total, ~11 imagens/s no máximo).
+- **Leitura**: o detector está bom (96,6%; o pior grupo é carro brasileiro, 92,6%). O **OCR ainda não é bom o bastante**: 82% por caractere, mas só **30% da placa inteira** acertada (e **25% ponta a ponta**). Isso é coerente com a conta: 7 posições com ~82% cada dão ~0.82^7 ≈ 25% de placa inteira. Acertar a placa inteira exige acurácia por caractere bem mais alta (95% por caractere daria ~70%).
+- `e2e_formato_valido` (0.966) continua igual à detecção e **não mede leitura correta** (ver seção 12). Não usar como métrica de qualidade.
+- Em produção, com webcam, a condição será mais difícil que o dataset (resolução, ângulo, luz); esperar números piores.
+
+**Decisões pendentes (dependem desses números)**
+1. **Melhorar o OCR** antes de apresentar como "lê placas": mais dados (`--per-folder` maior, até 5000 por pasta = 20 000), mais épocas (a curva ainda subia), e/ou trocar a arquitetura para CTC. Ordem sugerida: primeiro dados + épocas (mesma arquitetura, ~1 h+), medir de novo; só trocar para CTC se não chegar perto de 95% por caractere. Reservar o `evaluate` completo depois (~10 min).
+2. **Limiares** (`MIN_CONFIDENCE`, `DETECTOR_THRESHOLD`, `OCR_MIN_CONFIDENCE`): ainda provisórios (0.6 / 0.5 / vazio). O `evaluate` não mede acerto por faixa de confiança; para escolher o corte com dados, é preciso estender o `evaluate` para gravar a confiança de cada leitura e se estava certa (curva acerto x cobertura). Não escolher no chute.
+3. Como a política do serviço é enviar só placas com formato válido e confiança suficiente, vale medir quantas leituras **erradas** passam pelo filtro (placas erradas gravadas no banco são pior que placas não lidas).
