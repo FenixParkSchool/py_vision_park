@@ -24,6 +24,37 @@ Referência externa (não medida por nós): média de ~50,8% de 12 modelos de OC
 5. **Treino sem checkpoint por época** (o commit `029b926` já trouxe tipo do gabarito, parada antecipada e melhor época; falta salvar a cada época).
 6. Imagens borradas (pedágio). A resolução nativa (~125x42 px no carro) não é o gargalo principal.
 
+## 2.1 Revisão do código de treino (`training/train_ocr.py`, 12/11, Opus 5.5)
+Conclusão: **há problemas reais no código, mas eles não são a causa principal**. Corrigi-los é barato e deve dar ganho modesto (estimativa não medida: +2 a +5 pontos por caractere). Os ganhos grandes vêm da retificação, da arquitetura e dos dados (passos 1 a 4). Fazer a revisão como **passo 0b**, junto da infraestrutura.
+
+| # | Achado | Efeito | Correção |
+|---|---|---|---|
+| R1 | O tremor da caixa (`jitter_box`) é feito **uma vez no carregamento**; as 30 épocas veem exatamente os mesmos recortes | augmentação fraca; estagnação | recortar/tremer **a cada época** (gerador `tf.data` sobre imagens e caixas, ou várias versões em cache sorteadas por época) |
+| R2 | `random_brightness`/`random_contrast` são aplicados **depois do `.batch`**: o mesmo fator vale para as 64 imagens do lote | augmentação quase nula por imagem | aplicar por imagem (`map` antes do `batch`) |
+| R3 | Sem normalização de contraste por imagem (só pixel/255) | placas escuras/borradas ficam com pouco contraste | padronização por imagem (média 0, desvio 1) ou CLAHE no `ocr_input` (treino e inferência iguais) |
+| R4 | Validação com só **400** recortes (100 por pasta), tremidos | ruído de ±2-3 pontos entre épocas (vimos 0.65 -> 0.60 -> 0.73); a parada antecipada decide com base em ruído | validar com as 4000 de validação, caixa do gabarito |
+| R5 | `Flatten -> Dense(256)`: gargalo pequeno e perda da noção de posição | limita a leitura de letras (pos3 46-62%) | resolvido no passo 2 (arquitetura) |
+| R6 | Sem augmentação de desfoque, ruído, perspectiva ou JPEG | não treina para o pior caso real (webcam) | passo 3 |
+| R7 | Moto cortada no meio da caixa envolvente | letras cortadas | passo 1 (retificação) |
+| R8 | Salva só no fim | interrupção perde tudo | passo 0 (checkpoint por época) |
+
+Não encontrei bug de rótulo, de alfabeto ou de divisão treino/teste (o `pick` usa as 12 000 de treino com `--per-folder 3000`; o split é por pasta e estável). O CTC está implementado corretamente (blank no índice 36, `mask_index` coerente); o fraco desempenho dele é de arquitetura, não de bug.
+
+## 2.2 Modelos e esforço por tarefa (para gastar pouco sem perder qualidade)
+
+| Tarefa | Modelo | Esforço | Motivo |
+|---|---|---|---|
+| Coordenar, decidir arquitetura e retificação, interpretar resultados e decidir o próximo passo | **Opus 5.5** | alto | decisões difíceis e caras de errar |
+| Plano B se o passo 2 não passar de ~60% de placa inteira (redesenho do OCR, estratégia de dados) | **Fable 5.1** (opcional; o usuário autorizou em 12/11, antes estava vetado) | alto | só para o problema mais difícil |
+| Passo 0 e 0b (checkpoint, cache, validação completa, R1-R4, curva de confiança) | Sonnet 5.5 | médio | mudanças concretas e testáveis |
+| Passo 1 (retificação: `getPerspectiveTransform` no treino, `minAreaRect` na inferência) | Sonnet 5.5 | alto | geometria com risco de erro silencioso; Opus revisa o resultado |
+| Passo 2 (implementar a arquitetura decidida pelo Opus) | Sonnet 5.5 | médio | implementação guiada |
+| Passo 3 (augmentação, placas sintéticas; checar licença da fonte) | Sonnet 5.5 | médio | |
+| Passo 4 (avaliar modelo pré-treinado; checar licença) | Sonnet 5.5 | médio | Opus valida a conclusão |
+| Passo 5 (filtro de confiança, votação entre frames, deduplicador) | Sonnet 5.5 | médio | lógica de serviço com testes |
+| Rodar treinos/avaliações e registrar números | Sonnet 5.5 | baixo | mecânico, mas lê métricas (sem Haiku em lógica de reconhecimento) |
+| README, `.env.example`, renomeações | Haiku 5.5 | baixo | tarefa mecânica |
+
 ## 3. Critérios de sucesso (fixar antes de treinar)
 - **Dataset (teste completo, 4000)**: placa inteira ponta a ponta >= **70%** (excelente: >= 85%); 3ª posição >= 90%.
 - **Precisão do que é enviado ao backend**: entre as leituras que passam no filtro de confiança, >= **98% corretas**, cobrindo >= 60% dos veículos (curva acerto x cobertura).
@@ -37,6 +68,9 @@ Referência externa (não medida por nós): média de ~50,8% de 12 modelos de OC
 - Cache dos recortes pré-processados em `.npz` (carregar 24 000 recortes leva minutos a cada treino).
 - **GPU**: TensorFlow nativo no Windows não usa GPU desde a 2.11. Opções: WSL2 + CUDA, ou Google Colab/Kaggle (GPU gratuita). **Antes de subir o dataset para a nuvem, conferir a licença e os termos de uso do RodoSol-ALPR** (liberado mediante pedido, para pesquisa). Com GPU, treinos de horas viram minutos e os passos 2 a 4 ficam viáveis.
 - No `evaluate`: acrescentar a **curva confiança x acerto** (para o filtro) e a matriz de confusão (a saída por posição já existe).
+
+### Passo 0b. Correções do código de treino (seção 2.1: R1 a R4)
+- Medir antes e depois com o mesmo comando de treino e o `evaluate` completo; registrar o ganho real.
 
 ### Passo 1. Retificação da placa (maior ganho esperado pelo custo)
 - Treino: usar os **4 cantos** da anotação e `cv2.getPerspectiveTransform` para gerar a placa "de frente" (carro com 1 linha, moto com 2). Na moto, separar as linhas pela geometria retificada, não pelo meio da caixa.
