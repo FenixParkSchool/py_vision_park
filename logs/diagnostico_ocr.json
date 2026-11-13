@@ -1,0 +1,162 @@
+{
+  "treino": {
+    "n": 800,
+    "char_acc": 0.8804,
+    "placa_inteira": 0.5,
+    "acc_por_posicao": [
+      0.905,
+      0.887,
+      0.689,
+      0.94,
+      0.846,
+      0.934,
+      0.961
+    ],
+    "placas_por_n_erros": {
+      "0": 400,
+      "1": 230,
+      "2": 101,
+      "3": 45,
+      "4": 19,
+      "5": 3,
+      "6": 2,
+      "7": 0
+    },
+    "erros_de_tipo_letra_digito": "4/670",
+    "top_confusoes_verdade_leu": [
+      [
+        "E->F",
+        27
+      ],
+      [
+        "H->M",
+        20
+      ],
+      [
+        "I->J",
+        18
+      ],
+      [
+        "6->8",
+        17
+      ],
+      [
+        "F->E",
+        16
+      ],
+      [
+        "L->M",
+        13
+      ],
+      [
+        "Y->X",
+        13
+      ],
+      [
+        "2->7",
+        13
+      ],
+      [
+        "1->4",
+        13
+      ],
+      [
+        "J->I",
+        13
+      ],
+      [
+        "6->5",
+        12
+      ],
+      [
+        "D->O",
+        11
+      ]
+    ],
+    "conf_min_media_placa_certa": 0.576,
+    "conf_min_media_placa_errada": 0.338
+  },
+  "teste": {
+    "n": 800,
+    "char_acc": 0.8237,
+    "placa_inteira": 0.3162,
+    "acc_por_posicao": [
+      0.849,
+      0.792,
+      0.535,
+      0.92,
+      0.804,
+      0.912,
+      0.954
+    ],
+    "placas_por_n_erros": {
+      "0": 253,
+      "1": 275,
+      "2": 157,
+      "3": 75,
+      "4": 29,
+      "5": 9,
+      "6": 2,
+      "7": 0
+    },
+    "erros_de_tipo_letra_digito": "3/987",
+    "top_confusoes_verdade_leu": [
+      [
+        "4->1",
+        27
+      ],
+      [
+        "L->M",
+        20
+      ],
+      [
+        "H->M",
+        20
+      ],
+      [
+        "D->O",
+        18
+      ],
+      [
+        "K->M",
+        18
+      ],
+      [
+        "7->1",
+        18
+      ],
+      [
+        "I->J",
+        18
+      ],
+      [
+        "F->E",
+        18
+      ],
+      [
+        "Q->O",
+        17
+      ],
+      [
+        "E->F",
+        14
+      ],
+      [
+        "1->4",
+        14
+      ],
+      [
+        "N->M",
+        13
+      ]
+    ],
+    "conf_min_media_placa_certa": 0.485,
+    "conf_min_media_placa_errada": 0.325
+  },
+  "teste_char_acc_por_grupo": {
+    "car/Brazilian": 0.7657,
+    "car/Mercosur": 0.8514,
+    "motorcycle/Brazilian": 0.8529,
+    "motorcycle/Mercosur": 0.825
+  }
+}

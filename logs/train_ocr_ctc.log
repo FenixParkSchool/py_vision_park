@@ -1,0 +1,39 @@
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1794526200.537026   20624 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1794526206.338695   20624 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+treino (24000, 48, 128, 1) validação (400, 48, 128, 1)
+I0000 00:00:1794526417.160323   20624 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+WARNING:tensorflow:TensorFlow GPU support is not available on native Windows for TensorFlow >= 2.11. Even if CUDA/cuDNN are installed, GPU will not be used. Please use WSL2 or the TensorFlow-DirectML plugin.
+C:\Users\thiago.silva37\repos\py_vision_park\.venv\Lib\site-packages\keras\src\trainers\epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+Epoch 1/20
+E0000 00:00:1794526423.348655   20624 util.cc:131] oneDNN supports DT_BOOL only on platforms with AVX-512. Falling back to the default Eigen-based implementation if present.
+  época 1: val_char_accuracy=0.1039 val_plate_accuracy=0.0000
+375/375 - 217s - 578ms/step - loss: 19.2480 - val_loss: 18.9201 - val_char_accuracy: 0.1039 - val_plate_accuracy: 0.0000e+00 - learning_rate: 0.0010
+Epoch 2/20
+  época 2: val_char_accuracy=0.2954 val_plate_accuracy=0.0025
+375/375 - 211s - 562ms/step - loss: 14.9780 - val_loss: 14.9406 - val_char_accuracy: 0.2954 - val_plate_accuracy: 0.0025 - learning_rate: 0.0010
+Epoch 3/20
+  época 3: val_char_accuracy=0.4750 val_plate_accuracy=0.0100
+375/375 - 195s - 521ms/step - loss: 11.3025 - val_loss: 11.3471 - val_char_accuracy: 0.4750 - val_plate_accuracy: 0.0100 - learning_rate: 0.0010
+Epoch 4/20
+  época 4: val_char_accuracy=0.5336 val_plate_accuracy=0.0075
+375/375 - 196s - 522ms/step - loss: 9.6049 - val_loss: 10.1859 - val_char_accuracy: 0.5336 - val_plate_accuracy: 0.0075 - learning_rate: 0.0010
+Epoch 5/20
+  época 5: val_char_accuracy=0.5318 val_plate_accuracy=0.0225
+375/375 - 193s - 514ms/step - loss: 8.8186 - val_loss: 9.9289 - val_char_accuracy: 0.5318 - val_plate_accuracy: 0.0225 - learning_rate: 0.0010
+Epoch 6/20
+  época 6: val_char_accuracy=0.5686 val_plate_accuracy=0.0300
+375/375 - 205s - 547ms/step - loss: 8.2936 - val_loss: 9.3687 - val_char_accuracy: 0.5686 - val_plate_accuracy: 0.0300 - learning_rate: 0.0010
+Epoch 7/20
+  época 7: val_char_accuracy=0.5654 val_plate_accuracy=0.0475
+375/375 - 208s - 555ms/step - loss: 7.8737 - val_loss: 9.3831 - val_char_accuracy: 0.5654 - val_plate_accuracy: 0.0475 - learning_rate: 0.0010
+Epoch 8/20
+  época 8: val_char_accuracy=0.5711 val_plate_accuracy=0.0375
+375/375 - 203s - 543ms/step - loss: 7.5750 - val_loss: 9.1617 - val_char_accuracy: 0.5711 - val_plate_accuracy: 0.0375 - learning_rate: 0.0010
+Epoch 9/20
+  época 9: val_char_accuracy=0.5871 val_plate_accuracy=0.0500
+375/375 - 211s - 562ms/step - loss: 7.2768 - val_loss: 8.8576 - val_char_accuracy: 0.5871 - val_plate_accuracy: 0.0500 - learning_rate: 0.0010
+Epoch 10/20

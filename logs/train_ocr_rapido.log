@@ -1,0 +1,27 @@
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1794358350.363742   11024 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1794358361.416373   11024 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1794358396.291172   11024 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+WARNING:tensorflow:TensorFlow GPU support is not available on native Windows for TensorFlow >= 2.11. Even if CUDA/cuDNN are installed, GPU will not be used. Please use WSL2 or the TensorFlow-DirectML plugin.
+C:\Users\thiago.silva37\repos\py_vision_park\.venv\Lib\site-packages\keras\src\trainers\epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+treino (3200, 48, 128, 1) validação (400, 48, 128, 1)
+Epoch 1/8
+50/50 - 48s - 969ms/step - accuracy: 0.1363 - loss: 2.8343 - val_accuracy: 0.1339 - val_loss: 2.8757 - learning_rate: 0.0010
+Epoch 2/8
+50/50 - 39s - 787ms/step - accuracy: 0.1547 - loss: 2.5148 - val_accuracy: 0.1296 - val_loss: 2.6160 - learning_rate: 0.0010
+Epoch 3/8
+50/50 - 39s - 776ms/step - accuracy: 0.1779 - loss: 2.4433 - val_accuracy: 0.1289 - val_loss: 2.5401 - learning_rate: 0.0010
+Epoch 4/8
+50/50 - 38s - 762ms/step - accuracy: 0.1974 - loss: 2.3731 - val_accuracy: 0.1279 - val_loss: 2.5057 - learning_rate: 0.0010
+Epoch 5/8
+50/50 - 39s - 786ms/step - accuracy: 0.2092 - loss: 2.3238 - val_accuracy: 0.1379 - val_loss: 2.5202 - learning_rate: 0.0010
+Epoch 6/8
+50/50 - 39s - 778ms/step - accuracy: 0.2353 - loss: 2.2510 - val_accuracy: 0.1311 - val_loss: 2.5610 - learning_rate: 0.0010
+Epoch 7/8
+50/50 - 37s - 743ms/step - accuracy: 0.2710 - loss: 2.1368 - val_accuracy: 0.1325 - val_loss: 2.5196 - learning_rate: 5.0000e-04
+Epoch 8/8
+50/50 - 41s - 812ms/step - accuracy: 0.2992 - loss: 2.0641 - val_accuracy: 0.1518 - val_loss: 2.4888 - learning_rate: 5.0000e-04
+Salvo em models\ocr.keras (ficha: models\ocr.json )

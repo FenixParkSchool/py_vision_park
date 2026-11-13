@@ -1,0 +1,56 @@
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1794523796.182120   10424 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1794523810.741249   10424 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1794523814.225887   10424 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+WARNING:tensorflow:TensorFlow GPU support is not available on native Windows for TensorFlow >= 2.11. Even if CUDA/cuDNN are installed, GPU will not be used. Please use WSL2 or the TensorFlow-DirectML plugin.
+{
+  "imagens": 4000,
+  "tempos": {
+    "detector_ms_medio": 50.64,
+    "ocr_ms_medio": 41.16
+  },
+  "grupos": {
+    "car/Brazilian": {
+      "n": 1000,
+      "deteccao": 0.926,
+      "ocr_placa_inteira": 0.203,
+      "ocr_por_caractere": 0.7586,
+      "e2e_placa_inteira": 0.149,
+      "e2e_formato_valido": 0.926
+    },
+    "car/Mercosur": {
+      "n": 1000,
+      "deteccao": 0.986,
+      "ocr_placa_inteira": 0.337,
+      "ocr_por_caractere": 0.8369,
+      "e2e_placa_inteira": 0.278,
+      "e2e_formato_valido": 0.986
+    },
+    "motorcycle/Brazilian": {
+      "n": 1000,
+      "deteccao": 0.986,
+      "ocr_placa_inteira": 0.379,
+      "ocr_por_caractere": 0.8554,
+      "e2e_placa_inteira": 0.361,
+      "e2e_formato_valido": 0.986
+    },
+    "motorcycle/Mercosur": {
+      "n": 1000,
+      "deteccao": 0.967,
+      "ocr_placa_inteira": 0.293,
+      "ocr_por_caractere": 0.8463,
+      "e2e_placa_inteira": 0.229,
+      "e2e_formato_valido": 0.967
+    },
+    "todos": {
+      "n": 4000,
+      "deteccao": 0.9663,
+      "ocr_placa_inteira": 0.303,
+      "ocr_por_caractere": 0.8243,
+      "e2e_placa_inteira": 0.2542,
+      "e2e_formato_valido": 0.9663
+    }
+  }
+}
