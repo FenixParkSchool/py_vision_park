@@ -1,0 +1,5 @@
+-r requirements-dev.txt
+# Treino com GPU NVIDIA (Linux/WSL2): CUDA e cuDNN vêm pelo pip
+tensorflow[and-cuda]>=2.16,<3
+# CLI de ajuste fino do fast-plate-ocr (traz albumentations)
+fast-plate-ocr[train,onnx]==1.1.0

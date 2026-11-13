@@ -8,6 +8,13 @@ O TensorFlow **não usa GPU no Windows nativo desde a versão 2.11** (o próprio
 - **RTX 3060 (12 GB, seu PC)**: vale muito a pena. Estimativa (não medida): época do OCR de ~2,6 min em CPU para algo entre 5 e 20 s.
 - **GTX 745 (4 GB DDR3, Senac)**: não vale a pena. É uma placa antiga (arquitetura Maxwell, de 2014); as versões recentes do TensorFlow podem nem ter suporte a ela, e mesmo que funcionasse o ganho seria pequeno. No Senac, seguir em CPU.
 
+## Atalho: um comando
+Depois dos passos 1 a 3 abaixo (driver, WSL2, `nvidia-smi`), dentro do Ubuntu:
+```
+git clone https://github.com/FenixParkSchool/alpr_park.git ~/py_vision_park && bash ~/py_vision_park/scripts/preparar_treino_gpu.sh /mnt/e/rodosol
+```
+(troque `/mnt/e/rodosol` pela pasta do dataset; sem argumento, ele só confere `data/rodosol`). O script instala tudo pelo `requirements-gpu.lock`, confere a GPU e o dataset, baixa o OCR pronto, cria o `.env` e roda os testes. Pode ser repetido.
+
 ## Passo a passo (no seu PC)
 
 1. **Driver NVIDIA no Windows**: atualize pelo GeForce Experience/NVIDIA App ou pelo site da NVIDIA. **Não** instale driver de vídeo dentro do Linux; o WSL2 usa o do Windows.
