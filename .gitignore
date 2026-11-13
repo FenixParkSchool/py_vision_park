@@ -233,3 +233,6 @@ __marimo__/
 
 # pacote de trabalho
 *.zip
+
+# ambiente separado para testar OCRs prontos
+.venv-pretrained/
