@@ -65,3 +65,9 @@ def test_confidence_curve():
     assert c[0.5]["cobertura"] == 0.5 and c[0.5]["precisao"] == 0.5
     assert c[0.9]["cobertura"] == 0.25 and c[0.9]["precisao"] == 1.0
     assert c[0.99]["enviadas"] == 0 and c[0.99]["precisao"] is None
+
+
+def test_limiares_padrao_incluem_finos():
+    from training.evaluate import THRESHOLDS
+
+    assert {0.0, 0.5, 0.9, 0.95, 0.97, 0.98, 0.99} <= set(THRESHOLDS)

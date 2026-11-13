@@ -98,7 +98,7 @@ def summarize(records: list[Record]) -> dict[str, dict]:
     return saida
 
 
-THRESHOLDS = [i / 10 for i in range(10)]
+THRESHOLDS = [i / 10 for i in range(10)] + [0.95, 0.97, 0.98, 0.99]
 
 
 def confidence_curve(records: list[Record], thresholds=THRESHOLDS) -> list[dict]:

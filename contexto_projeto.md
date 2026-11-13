@@ -393,3 +393,11 @@ Mesmo detector (o nosso, 96,6%) em todos; `experiments/avaliar_ocr_pronto.py` (a
 - Curva de confiança (cct-s-v2, 4000): limiar 0.0 -> envia 96,6%, precisão 81,7%; 0.8 -> 92,3% / 85,4%; **0.9 -> 87,3% / 89,3%**. A confiança separa pouco abaixo de 0.9; falta medir 0.95-0.99 (em andamento).
 - Ajuste fino possível com a CLI `fast-plate-ocr train` (`pip install fast-plate-ocr[train]`; CSV `image_path,plate_text[,plate_region]`); falta descobrir os pesos Keras do cct-s-v2 para `--weights-path` (o zoo distribui ONNX). Fazer em casa, na RTX 3060, focando em moto.
 - **Decisão**: integrar o cct-s-v2 como OCR do serviço (`RECOGNITION_MODE=fpo`), mantendo nosso detector; nosso OCR vira plano B. Integração delegada a agente Sonnet (13/11).
+
+### Integração do cct-s-v2 no serviço (13/11, agente Sonnet)
+- `RECOGNITION_MODE=fpo` (recomendado; padrão continua `fake`), `FPO_MODEL=cct-s-v2-global-model`. `build_pipeline` usa `TfPlateDetector` + `FastPlateReader` (`app/recognition/fpo_reader.py`); falha ao carregar -> `startup_error` e `/health/ready` 503. Dependência `fast-plate-ocr[onnx]==1.1.0` + `onnxruntime` no `requirements.txt` (o `requirements.lock` **não** foi regenerado: falta `uv` no PATH do Senac).
+- Confiança da leitura = média das probabilidades dos caracteres. Pesos em `~/.cache/fast-plate-ocr/<modelo>/` (1ª vez precisa de internet; README explica como copiar para máquina offline).
+- Avaliação integrada (4000, `experiments/avaliar_fpo.py`): **78,9%** ponta a ponta (igual ao experimento); detector 45,8 ms + OCR 21,0 ms por imagem.
+- Curva de confiança (cobertura / precisão de placa inteira): 0.9 -> 87,3% / 89,3%; **0.95 -> 81,0% / 93,0%**; **0.97 -> 75,6% / 95,3%**; 0.98 -> 72,2% / 96,4%; 0.99 -> 66,9% / 97,6%.
+- **`OCR_MIN_CONFIDENCE` provisório: 0.95** (alternativa 0.97 se preferir errar menos). Com a câmera, o mesmo veículo aparece em vários frames, então perder uma leitura custa menos que enviar uma errada. O filtro de formato (Mercosul/antiga) ainda descarta parte dos erros. Fixar só com dados reais da câmera.
+- 163 testes passaram. README sem menções a RTSP (só câmera USB ou vídeo de teste).

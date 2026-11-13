@@ -81,3 +81,24 @@ def test_modo_tf_sem_modelo_deixa_ready_503(monkeypatch, tmp_path):
         r = client.get("/health/ready")
         assert r.status_code == 503
         assert "Modelo não encontrado" in r.json()["reason"]
+
+
+def test_modo_fpo_falha_ao_carregar_deixa_ready_503(monkeypatch, tmp_path):
+    import app.recognition.fpo_reader as fpo
+
+    def settings():
+        return Settings(
+            backend_api_key="k" * 32,
+            recognition_mode="fpo",
+            fpo_model="modelo-inexistente",
+            detector_model_path=str(tmp_path / "nao_existe.keras"),
+        )
+
+    def falha(name):
+        raise RuntimeError("sem internet")
+
+    monkeypatch.setattr(fpo.FastPlateReader, "from_model", staticmethod(falha))
+    monkeypatch.setattr(main, "get_settings", settings)
+    monkeypatch.setattr(main, "CameraSource", FakeCamera)
+    with TestClient(main.app) as client:
+        assert client.get("/health/ready").status_code == 503

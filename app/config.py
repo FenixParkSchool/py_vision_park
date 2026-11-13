@@ -20,8 +20,10 @@ class Settings(BaseSettings):
     sample_interval_seconds: float = Field(default=1.0, gt=0)
     backend_timeout: float = Field(default=5, gt=0)
     backend_max_retries: int = Field(default=3, ge=0)
-    # "fake" = detector/OCR de mentira (desenvolvimento); "tf" = modelos Keras treinados.
-    recognition_mode: Literal["fake", "tf"] = "fake"
+    # "fake" = detector/OCR de mentira (desenvolvimento); "tf" = modelos Keras treinados;
+    # "fpo" = nosso detector + OCR pronto fast-plate-ocr (recomendado).
+    recognition_mode: Literal["fake", "tf", "fpo"] = "fake"
+    fpo_model: str = "cct-s-v2-global-model"
     detector_model_path: str = "models/detector.keras"
     ocr_model_path: str = "models/ocr.keras"
     detector_threshold: float = Field(default=0.5, ge=0, le=1)  # limiar do mapa de probabilidade

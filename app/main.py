@@ -30,6 +30,18 @@ def build_pipeline(settings, deduplicator: Deduplicator) -> RecognitionPipeline:
         reader: PlateReader = TfPlateReader.from_file(Path(settings.ocr_model_path))
         log.info("Detector: %s", describe(Path(settings.detector_model_path)))
         log.info("OCR: %s", describe(Path(settings.ocr_model_path)))
+    elif settings.recognition_mode == "fpo":
+        # Falha (sem internet na 1ª vez, modelo inexistente) vira startup_error no lifespan.
+        from app.recognition.fpo_reader import FastPlateReader
+        from app.recognition.model_card import describe
+        from app.recognition.tf_models import TfPlateDetector
+
+        detector = TfPlateDetector.from_file(
+            Path(settings.detector_model_path), threshold=settings.detector_threshold
+        )
+        reader = FastPlateReader.from_model(settings.fpo_model)
+        log.info("Detector: %s", describe(Path(settings.detector_model_path)))
+        log.info("OCR: fast-plate-ocr, modelo %s", settings.fpo_model)
     else:
         log.warning("RECOGNITION_MODE=fake: nenhuma placa será detectada de verdade")
         detector = FakePlateDetector()
