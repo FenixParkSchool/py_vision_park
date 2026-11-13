@@ -347,3 +347,10 @@ Lê o recorte do **gabarito** (só o OCR), 800 imagens de treino e 800 de teste,
 3. Trocar o OCR por **CRNN com CTC** (convolucional, sem LSTM para caber em CPU), mantendo o atual como `--arch positions` para comparação. Motivo: o atual (Flatten + Dense, 7 saídas fixas) precisa decorar onde cada caractere fica, e carro/moto têm posições diferentes; CTC lê da esquerda para a direita sem posição fixa e é o padrão para texto em imagem.
 4. Teste rápido do CTC (400/pasta, 8 épocas, ~10 min) para garantir que aprende; depois treino com todas as 12 000 imagens de treino e parada antecipada; `evaluate` completo e comparação com a seção 14.
 5. Adiado: votação entre frames (só mede com vídeo/webcam; o RodoSol tem uma imagem por veículo) e modelo pré-treinado de terceiros (ex.: fast-plate-ocr; licença e cobertura de placas brasileiras **não verificadas**).
+
+### Resultado do CTC (12/11/2026, 20:28 a 21:04) - descartado por ora
+- Implementado por agente Sonnet (commit `029b926`): `--arch {positions,ctc}`, `--copies`, parada antecipada (val_loss, paciência 4, melhor época), tipo de veículo do gabarito no treino, `decode_ctc`, `TfPlateReader` reconhece os dois formatos, `ocr_por_posicao`/`e2e_por_posicao` no `evaluate`. 151 testes passaram.
+- Treino `--arch ctc --per-folder 3000 --copies 2` (24 000 recortes), ~200 s/época. Validação por caractere: 0.10, 0.30, 0.48, 0.53, 0.53, 0.57, 0.57, 0.57, **0.59** (época 9); placa inteira só **5%**. O positions antigo tinha ~0.70 na época 7 e terminou em 0.81.
+- **Parado manualmente na época 9** (val_loss estabilizado em ~9.37; ia perder para o positions). Nenhum modelo CTC completo foi salvo. A métrica por caractere compara posição a posição e penaliza leituras com comprimento errado, mas a placa inteira (5%) confirma o resultado.
+- Hipótese (não testada): CRNN só convolucional não tem contexto suficiente entre as fatias; um CTC com BiLSTM poderia ir melhor, mas é mais lento em CPU. Fica como opção futura.
+- Em seguida: `--arch positions --per-folder 3000 --copies 1 --epochs 30` (correções aplicadas, todas as 12 000 de treino) -> `models/ocr_pos_v2.keras`, log `logs/train_ocr_pos_v2.log`.
