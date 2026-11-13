@@ -59,6 +59,7 @@ class Record:
     iou: float
     gt_text: str | None  # leitura do recorte do gabarito
     e2e_text: str | None  # leitura do recorte detectado (None se não detectou/ilegível)
+    e2e_confidence: float = 0.0  # confiança da leitura ponta a ponta (0 se não houve leitura)
 
 
 def summarize(records: list[Record]) -> dict[str, dict]:
@@ -97,6 +98,32 @@ def summarize(records: list[Record]) -> dict[str, dict]:
     return saida
 
 
+THRESHOLDS = [i / 10 for i in range(10)]
+
+
+def confidence_curve(records: list[Record], thresholds=THRESHOLDS) -> list[dict]:
+    """Curva confiança x acerto para escolher o filtro.
+
+    Por limiar: `cobertura` = fração das imagens cuja leitura ponta a ponta seria enviada
+    (há texto e confiança >= limiar); `precisao` = placa inteira correta entre as enviadas
+    (None se nenhuma foi enviada).
+    """
+    n = len(records)
+    curva = []
+    for t in thresholds:
+        enviadas = [r for r in records if r.e2e_text and r.e2e_confidence >= t]
+        certas = sum(r.e2e_text == r.plate for r in enviadas)
+        curva.append(
+            {
+                "limiar": round(t, 2),
+                "enviadas": len(enviadas),
+                "cobertura": round(len(enviadas) / n, 4) if n else 0.0,
+                "precisao": round(certas / len(enviadas), 4) if enviadas else None,
+            }
+        )
+    return curva
+
+
 def evaluate(detector, reader, paths: list[Path]) -> tuple[list[Record], dict[str, float]]:
     records: list[Record] = []
     tempos = {"detector": 0.0, "ocr": 0.0}
@@ -113,24 +140,28 @@ def evaluate(detector, reader, paths: list[Path]) -> tuple[list[Record], dict[st
         melhor_iou = iou(melhor.bbox, a.bbox) if melhor else 0.0
         detectou = melhor_iou >= IOU_MIN
 
-        def ler(caixa: BoundingBox) -> str | None:
+        def ler(caixa: BoundingBox):
+            """(texto, confiança) da leitura, ou (None, 0.0)."""
             recorte = crop_region(frame, caixa)
             if recorte is None:
-                return None
+                return None, 0.0
             t = time.perf_counter()
             leitura = reader.read(recorte)
             tempos["ocr"] += time.perf_counter() - t
             chamadas["ocr"] += 1
-            return leitura.text if leitura else None
+            return (leitura.text, leitura.confidence) if leitura else (None, 0.0)
 
+        gt_text, _ = ler(a.bbox)
+        e2e_text, e2e_conf = ler(melhor.bbox) if detectou else (None, 0.0)
         records.append(
             Record(
                 group=f"{a.vehicle_type}/{a.layout}",
                 plate=a.plate,
                 detected=detectou,
                 iou=melhor_iou,
-                gt_text=ler(a.bbox),
-                e2e_text=ler(melhor.bbox) if detectou else None,
+                gt_text=gt_text,
+                e2e_text=e2e_text,
+                e2e_confidence=e2e_conf,
             )
         )
     medios = {f"{k}_ms_medio": round(1000 * tempos[k] / max(1, chamadas[k]), 2) for k in tempos}
@@ -154,7 +185,12 @@ def main() -> None:
     records, tempos = evaluate(
         TfPlateDetector.from_file(args.detector), TfPlateReader.from_file(args.ocr), teste
     )
-    resultado = {"imagens": len(teste), "tempos": tempos, "grupos": summarize(records)}
+    resultado = {
+        "imagens": len(teste),
+        "tempos": tempos,
+        "grupos": summarize(records),
+        "curva_confianca": confidence_curve(records),
+    }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(resultado, indent=2, ensure_ascii=False), encoding="utf-8")
     print(json.dumps(resultado, indent=2, ensure_ascii=False))

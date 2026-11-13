@@ -49,3 +49,19 @@ def test_summarize_por_posicao():
     m = summarize(recs)["car/Mercosul"]
     assert m["ocr_por_posicao"] == [1, 1, 1, 0.5, 1, 1, 1]
     assert m["e2e_por_posicao"] == [0.5] * 7
+
+
+def test_confidence_curve():
+    from training.evaluate import confidence_curve
+
+    recs = [
+        Record("g", "ABC1D23", True, 0.9, "ABC1D23", "ABC1D23", 0.95),
+        Record("g", "ABC1D23", True, 0.9, "ABC1D23", "ABC1D24", 0.55),
+        Record("g", "ABC1D23", True, 0.9, "ABC1D23", "ABC1D23", 0.30),
+        Record("g", "ABC1D23", False, 0.0, "ABC1D23", None, 0.0),
+    ]
+    c = {x["limiar"]: x for x in confidence_curve(recs, [0.0, 0.5, 0.9, 0.99])}
+    assert c[0.0]["cobertura"] == 0.75 and c[0.0]["precisao"] == round(2 / 3, 4)
+    assert c[0.5]["cobertura"] == 0.5 and c[0.5]["precisao"] == 0.5
+    assert c[0.9]["cobertura"] == 0.25 and c[0.9]["precisao"] == 1.0
+    assert c[0.99]["enviadas"] == 0 and c[0.99]["precisao"] is None
