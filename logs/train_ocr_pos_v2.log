@@ -51,3 +51,6 @@ Epoch 14/30
   época 14: val_char_accuracy=0.8064 val_plate_accuracy=0.3300
 188/188 - 147s - 782ms/step - accuracy: 0.6537 - loss: 1.0182 - val_accuracy: 0.8064 - val_loss: 0.6898 - val_char_accuracy: 0.8064 - val_plate_accuracy: 0.3300 - learning_rate: 0.0010
 Epoch 15/30
+  época 15: val_char_accuracy=0.7968 val_plate_accuracy=0.2575
+188/188 - 157s - 834ms/step - accuracy: 0.6672 - loss: 0.9780 - val_accuracy: 0.7968 - val_loss: 0.6817 - val_char_accuracy: 0.7968 - val_plate_accuracy: 0.2575 - learning_rate: 0.0010
+Epoch 16/30
