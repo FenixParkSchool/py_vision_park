@@ -401,3 +401,44 @@ Mesmo detector (o nosso, 96,6%) em todos; `experiments/avaliar_ocr_pronto.py` (a
 - Curva de confiança (cobertura / precisão de placa inteira): 0.9 -> 87,3% / 89,3%; **0.95 -> 81,0% / 93,0%**; **0.97 -> 75,6% / 95,3%**; 0.98 -> 72,2% / 96,4%; 0.99 -> 66,9% / 97,6%.
 - **`OCR_MIN_CONFIDENCE` provisório: 0.95** (alternativa 0.97 se preferir errar menos). Com a câmera, o mesmo veículo aparece em vários frames, então perder uma leitura custa menos que enviar uma errada. O filtro de formato (Mercosul/antiga) ainda descarta parte dos erros. Fixar só com dados reais da câmera.
 - 163 testes passaram. README sem menções a RTSP (só câmera USB ou vídeo de teste).
+
+
+## 19. Roteiro para o treino em casa (RTX 3060, WSL2) - ponto de partida da próxima sessão
+Escrito em 13/11/2026. Estado: o serviço já usa o OCR pronto **fast-plate-ocr `cct-s-v2`** (`RECOGNITION_MODE=fpo`, 78,9% de placa inteira ponta a ponta no teste do RodoSol). O treino em casa serve para (1) obter o **número definitivo** e (2) tentar melhorar **motos** (moto antiga 58,8%) com ajuste fino. Nada aqui foi executado no PC de casa ainda.
+
+### O que levar do Senac (fora do git)
+- Pasta `models/` (no mínimo `detector.keras` + `detector.json`, sha256 `57be8512...`; sem ela, retreinar o detector: ~20 min em CPU, bem menos na GPU).
+- Dataset RodoSol completo (`data/rodosol/`, 4 pastas, 20 000 imagens, ~9 GB) num pendrive/HD. Opcional: `data/cache/` (gerado de novo se faltar).
+
+### Preparar o PC (uma vez)
+1. Atualizar o driver NVIDIA no **Windows**.
+2. PowerShell (administrador): `wsl --install -d Ubuntu-22.04`, reiniciar, criar usuário no Ubuntu, `wsl --update`.
+3. No Ubuntu: `nvidia-smi` deve mostrar a RTX 3060.
+4. Um comando (troque `/mnt/e/rodosol` pela pasta do dataset):
+   ```
+   git clone https://github.com/FenixParkSchool/alpr_park.git ~/py_vision_park && bash ~/py_vision_park/scripts/preparar_treino_gpu.sh /mnt/e/rodosol
+   ```
+   O script (`scripts/preparar_treino_gpu.sh`) instala dependências do sistema, `uv`, Python 3.11, `.venv` pelo `requirements-gpu.lock` (TensorFlow 2.21 com CUDA + fast-plate-ocr 1.1.0 com a CLI de treino), confere GPU e dataset, baixa o `cct-s-v2`, cria o `.env` (modo fpo, limiar 0.95) e roda os testes. Pode ser repetido. Detalhes: `docs/gpu_wsl2.md`.
+5. Copiar `models/` do Senac para `~/py_vision_park/models/` (no Windows: `\wsl$\Ubuntu-22.04\home\<usuario>\py_vision_park`).
+6. **Anotar aqui**: versão do driver, `tf.config.list_physical_devices('GPU')`, tempo por época medido.
+
+### Ordem do trabalho (dentro do Ubuntu, `source .venv/bin/activate`)
+1. **Linha de base no PC**: `python -m experiments.avaliar_fpo --limit 0` -> deve repetir ~78,9% ponta a ponta (confirma que o ambiente está igual). Salva `models/avaliacao_fpo_integrado.json`.
+2. **Exportar dados para o fast-plate-ocr**: `python -m training.exportar_fpo` -> `data/fpo/{train,val,test}/*.png` e `data/fpo/{train,val,test}.csv` (`image_path,plate_text`; recorte do gabarito com 8% de margem; moto exportada inteira). Testado em 13/11 com 4 imagens reais.
+3. **Ajuste fino do cct-s-v2** (em investigação; não executado ainda):
+   - `fast-plate-ocr train --help` para confirmar as opções (o agente leu no código: `--model-config-file`, `--plate-config-file`, `--annotations`, `--val-annotations`, `--weights-path`, `--batch-size`, `--epochs`, `--output-dir`). `fast-plate-ocr validate-dataset` confere o CSV.
+   - Baixar `cct_s_v2_global_model_config.yaml` e `cct_s_v2_global_plate_config.yaml` (release `arg-plates` do GitHub do fast-plate-ocr).
+   - **Pendência**: o zoo distribui o modelo em ONNX; `--weights-path` espera pesos Keras. Verificar no repositório/issues se os pesos `.keras` do cct-s-v2 estão disponíveis. Se não estiverem, alternativas: treinar a mesma arquitetura (config yaml) do zero com RodoSol + dados próprios, ou ficar com o cct-s-v2 sem ajuste.
+   - Confirmar se o `plate_config` aceita o alfabeto/tamanho das placas brasileiras (7 caracteres; moto de duas linhas).
+   - Avaliar o modelo ajustado com o **mesmo** `evaluate` (4000 de teste) e só trocar se vencer 78,9% ponta a ponta, olhando principalmente moto/BR (58,8%) e moto/ME (74,3%).
+   - Atenção ao vazamento: se o RodoSol estiver no treino do cct-s-v2 (não confirmado, seção 18), o ganho medido no teste do RodoSol pode ser otimista.
+4. **Plano B (nosso OCR)**, só se o passo 3 não for viável: `python -m training.train_ocr --arch positions --per-folder 3000 --epochs 60 --out models/ocr_positions.keras` (checkpoint por época, cache, augmentação por época e validação completa já implementados) e `python -m training.evaluate --ocr models/ocr_positions.keras`.
+5. **Filtro**: com o modelo final, olhar `curva_confianca` do `avaliacao*.json` e fixar `OCR_MIN_CONFIDENCE` (hoje 0.95 provisório: 81% de cobertura / 93% de precisão).
+6. Registrar tudo aqui (comandos, tempos, sha256, métricas por grupo) e trazer os modelos de volta para o Windows.
+
+### Pendências fora do treino
+- **Back_park**: branch `fix/restaura-evento-alpr` (commit `8198e26`) pushada em 13/11; restaura a gravação do evento ALPR (Temporal) e o tratamento de `ALPR_API_KEY` vazia, que o revert `e1020be` havia apagado. **Falta**: `npm test` (grava no banco compartilhado e apaga ao final), abrir o PR (o usuário abre manualmente) e avisar a equipe para não reverter de novo.
+- `BACKEND_API_KEY` do `.env` do py_vision_park = `ALPR_API_KEY` do Back_park (nunca commitar nem colar em chat).
+- Teste com câmera real: sem webcam disponível por ora; quando houver, medir em placas de SP (número que vale para a apresentação).
+- Ajuste fino só vale a pena se o ambiente de casa repetir a linha de base (passo 1).
+- Atividade UC 11 (erro/defeito/falha): PDF gerado fora do repo (`C:\Users\thiago.silva37\repos\UC11_Atividade1_Erro_Defeito_Falha.pdf`, capa no template do Senac); falta o nome do docente da UC 11 na folha de rosto.

@@ -87,7 +87,9 @@ Ambiente pronto. Próximos comandos (dentro do Ubuntu, nesta pasta):
   python -m experiments.avaliar_fpo --limit 0
   # treinar o detector, se não tiver models/detector.keras
   python -m training.train_detector --per-folder 600 --epochs 12
+  # exportar recortes no formato do fast-plate-ocr (data/fpo/{train,val,test}.csv)
+  python -m training.exportar_fpo
   # treinar o nosso OCR (plano B), com checkpoint por época
   python -m training.train_ocr --arch positions --per-folder 3000 --epochs 60 --out models/ocr_positions.keras
-Ajuste fino do fast-plate-ocr: ver docs/plano_ocr.md e contexto_projeto.md (seção 18).
+Roteiro completo do treino em casa: contexto_projeto.md, seção 19.
 FIM
