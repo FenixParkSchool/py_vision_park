@@ -354,3 +354,10 @@ Lê o recorte do **gabarito** (só o OCR), 800 imagens de treino e 800 de teste,
 - **Parado manualmente na época 9** (val_loss estabilizado em ~9.37; ia perder para o positions). Nenhum modelo CTC completo foi salvo. A métrica por caractere compara posição a posição e penaliza leituras com comprimento errado, mas a placa inteira (5%) confirma o resultado.
 - Hipótese (não testada): CRNN só convolucional não tem contexto suficiente entre as fatias; um CTC com BiLSTM poderia ir melhor, mas é mais lento em CPU. Fica como opção futura.
 - Em seguida: `--arch positions --per-folder 3000 --copies 1 --epochs 30` (correções aplicadas, todas as 12 000 de treino) -> `models/ocr_pos_v2.keras`, log `logs/train_ocr_pos_v2.log`.
+
+
+## 17. Encerramento de 12/11/2026 (21:40, computador do Senac desligado)
+- **OCR positions v2**, validação por época (caractere / placa inteira): 1: 0.136/0.000; 2: 0.184/0.005; 3: 0.380/0.008; 4: 0.492/0.020; 5: 0.562/0.040; 6: 0.580/0.058; 7: 0.650/0.105; 8: 0.599/0.075; 9: 0.725/0.158; 10: 0.731/0.163; 11: 0.766/0.210. ~2,6 min/época. Praticamente empatado com o v1 época a época. **Interrompido pelo desligamento; nenhum modelo foi salvo** (o script só salva no fim do treino).
+- Conclusão: com a arquitetura atual, a projeção (não medida) é ~85-88% por caractere e ~35-45% de placa inteira, o que é **insatisfatório**. Melhorias pequenas de treino não bastam.
+- **Plano definitivo em [docs/plano_ocr.md](docs/plano_ocr.md)** (para Opus 5.5 / Fable): checkpoint por época, cache e GPU (WSL2/Colab, conferindo a licença do dataset); retificação pelos 4 cantos; nova arquitetura; augmentação e placas sintéticas contra o viés regional; modelo pré-treinado como linha de base; filtro de confiança, votação entre frames e redesenho do deduplicador; critérios de sucesso fixados antes de treinar.
+- **Arquivos fora do git que só existem no computador do Senac** (copiar para pendrive/nuvem se possível): `models/detector.keras` + `.json` (bom, 96,6%), `models/ocr.keras` + `.json` (v1), `models/avaliacao.json`, `models/anteriores_05-11/`, `logs/`. Se forem perdidos, o detector precisa ser retreinado (~20 min).
