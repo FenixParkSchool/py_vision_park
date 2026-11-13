@@ -375,3 +375,21 @@ Lê o recorte do **gabarito** (só o OCR), 800 imagens de treino e 800 de teste,
 - **Não é possível afirmar nem descartar que o RodoSol esteja no treino.** Sinal de alerta: no artigo do RodoSol, nenhum modelo dos autores nem os dois comerciais passaram de 70% no teste; o `cct-s-v2` fez 80,6% ponta a ponta em 500 imagens. Isso pode ser um modelo muito melhor (treinado com muito mais dados) **ou** vazamento.
 - **Teste definitivo**: avaliar em imagens que o modelo certamente não viu: fotos/vídeo da webcam de placas reais (Senac/estacionamento, com cuidado de privacidade) e, se disponível, outro dataset. Para isso, rotular manualmente ~50-100 placas (texto) basta para uma estimativa.
 - Fontes: docs https://ankandrew.github.io/fast-plate-ocr/latest/inference/model_zoo/ ; repo https://github.com/ankandrew/fast-plate-ocr ; arXiv 2601.07671 e 2201.00267.
+
+### Resultado da avaliação de OCRs prontos (13/11, agente Sonnet) - **vencedor: fast-plate-ocr `cct-s-v2`**
+Mesmo detector (o nosso, 96,6%) em todos; `experiments/avaliar_ocr_pronto.py` (ambiente `.venv-pretrained`).
+
+| Leitor | Imagens | OCR isolado (placa) | Por caractere | Ponta a ponta |
+|---|---|---|---|---|
+| Nosso positions v1 | 4000 | 30,3% | 82,4% | 25,4% |
+| **fast-plate-ocr cct-s-v2** (MIT) | **4000** | **88,4%** | **96,3%** | **78,9%** |
+| fast-plate-ocr cct-xs-v2 | 500 | 84,6% | 94,5% | 74,6% |
+| fast-plate-ocr mobilevit-v2 | 500 | 59,0% | 80,7% | 48,6% |
+| AccessALPR (GPL) | 500 | 20,0% | 46,8% | 16,0% |
+
+- cct-s-v2 ponta a ponta por grupo: car/BR 84,7%; car/ME 97,7%; moto/BR **58,8%**; moto/ME 74,3%. Ponto fraco: moto (2 linhas), principalmente antiga. OCR ~21-25 ms por recorte em CPU (cct-xs-v2: 4,6 ms, alternativa mais rápida com -4 pontos).
+- platerec descartado: **sem licença** (PyPI e GitHub). AccessALPR descartado pelo desempenho (moto 0%).
+- Licença fast-plate-ocr MIT confirmada no METADATA/LICENSE do pacote; pesos vêm de release do GitHub do autor (conferir texto da licença dos pesos no repositório antes de distribuir).
+- Curva de confiança (cct-s-v2, 4000): limiar 0.0 -> envia 96,6%, precisão 81,7%; 0.8 -> 92,3% / 85,4%; **0.9 -> 87,3% / 89,3%**. A confiança separa pouco abaixo de 0.9; falta medir 0.95-0.99 (em andamento).
+- Ajuste fino possível com a CLI `fast-plate-ocr train` (`pip install fast-plate-ocr[train]`; CSV `image_path,plate_text[,plate_region]`); falta descobrir os pesos Keras do cct-s-v2 para `--weights-path` (o zoo distribui ONNX). Fazer em casa, na RTX 3060, focando em moto.
+- **Decisão**: integrar o cct-s-v2 como OCR do serviço (`RECOGNITION_MODE=fpo`), mantendo nosso detector; nosso OCR vira plano B. Integração delegada a agente Sonnet (13/11).
