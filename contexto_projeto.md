@@ -474,3 +474,23 @@ Escrito em 13/11/2026. Estado: o serviço já usa o OCR pronto **fast-plate-ocr 
 2. Treino completo: `fast-plate-ocr train` com `train.csv` (12 000) / `val.csv` (4000), `--weights-path models/fpo_base/cct_s_v2_global.keras --lr 1e-4 --epochs 40 --early-stopping-patience 8 --batch-size 64 --workers 8 --seed 42`. Estimativa (não medida): 2-3 min/época, até ~1,5 h. Se a GPU ficar ociosa, aumentar `--workers` ou usar `--use-multiprocessing`.
 3. Exportar ONNX -> `avaliar_fpo` nas mesmas 4000 de teste. Promover só se passar de **79,7% e2e**, olhando principalmente moto/BR (58,1%) e moto/ME (77,0%).
 4. **Risco principal: sobreajuste ao Espírito Santo.** O RodoSol tem forte viés de letras (pos1 O/Q/M 72%, pos2 R/P/D 63%; seção 16). O ajuste fino pode subir o número no RodoSol e **piorar** em placas de SP. Lr baixo e parada antecipada ajudam, mas não provam nada. A decisão de trocar o modelo precisa de um conjunto **fora do RodoSol**: 50-100 fotos reais rotuladas (webcam ou celular, placas de SP), comparando original x ajustado. Sem isso, manter o original em produção.
+
+### Resultado do ajuste fino completo (14/11/2026, 00:09 a 01:13, RTX 3060)
+- **Velocidade (mesmo treino curto: 2000 imagens + validação em 1000):** GPU com 8 threads ~19 s/época; **só CPU ~190 s/época (GPU ~10x)**; GPU com `--use-multiprocessing` ~140 s/época (no Windows cada processo reimporta tudo; não usar). 16 threads = 8 threads. A GPU fica em ~40% de uso: o gargalo é a CPU preparando e aumentando as imagens.
+- **Comando** (em `data/fpo`, `KERAS_BACKEND=torch`, venv de treino): `fast-plate-ocr train --model-config-file models/fpo_base/cct_s_v2_global_model_config.yaml --plate-config-file models/fpo_base/cct_s_v2_global_plate_config.yaml --annotations train.csv --val-annotations val.csv --weights-path models/fpo_base/cct_s_v2_global.keras --lr 0.0001 --epochs 40 --early-stopping-patience 8 --batch-size 64 --workers 8 --seed 42 --output-dir models/fpo_br`. CSVs com `plate_region=Brazil` (equivale a `exportar_fpo --regiao Brazil`). Log: `logs/train_fpo_br.log`.
+- 40 épocas, ~1,6 min cada (~64 min). Validação, placa inteira no recorte do gabarito: época 1 89,4% -> 6 96,7% -> 10 97,3% -> 19 97,9% -> **32 98,1% (melhor)**; não melhorou nas épocas 33 a 40.
+- Exportado: `python -m training.exportar_onnx_fpo --model models/fpo_br/2026-11-14_00-09-26/best.keras --plate-config models/fpo_base/cct_s_v2_global_plate_config.yaml --out models/ocr_fpo_br.onnx`. sha256: onnx `65dfe88c...`, best.keras `e98cd74f...`.
+- **Avaliação ponta a ponta** (`avaliar_fpo --limit 0 --model models/ocr_fpo_br.onnx --out models/avaliacao_fpo_br.json`, mesmas 4000 de teste, mesmo detector):
+
+| Grupo | Original e2e | **Ajustado e2e** | Ajustado OCR isolado | Detecção |
+|---|---|---|---|---|
+| car/Brazilian | 86,0% | **87,4%** | 96,5% | 92,8% |
+| car/Mercosur | 97,9% | **98,3%** | 99,5% | 98,8% |
+| motorcycle/Brazilian | 58,1% | **94,6%** | 96,0% | 99,0% |
+| motorcycle/Mercosur | 77,0% | **95,5%** | 99,6% | 96,6% |
+| **todos** | **79,7%** | **94,0%** | 97,9% | 96,8% |
+
+- Curva de confiança do ajustado (cobertura / precisão): 0.0 -> 96,8% / 97,1%; 0.9 -> 95,8% / 98,0%; **0.95 -> 94,5% / 98,8%**; 0.97 -> 92,8% / 99,4%; 0.98 -> 91,3% / 99,8%; 0.99 -> 86,8% / 99,9%. Tempo: detector 31,7 ms + OCR 14,2 ms.
+- **Leitura:** o OCR deixou de ser o gargalo. O pior grupo, carro brasileiro, agora é limitado pela **detecção** (92,8%; OCR 96,5%). Próximo ganho no RodoSol: o detector.
+- **Ressalvas (não ignorar):** (1) treino e teste são do RodoSol (mesma câmera, mesma região, placas do ES); a divisão não se sobrepõe, mas o ganho mede adaptação a esse cenário, **não** a placas de SP. (2) O risco de sobreajuste ao viés de letras do ES (seção 16) **não foi medido**. (3) Continua não sendo possível saber se o RodoSol estava no treino do cct-s-v2 original.
+- **Decisão:** o padrão continua `FPO_MODEL=cct-s-v2-global-model`. Trocar para `models/ocr_fpo_br.onnx` só depois de comparar os dois em 50-100 fotos reais rotuladas fora do RodoSol (webcam/celular, SP). Se o ajustado não piorar nelas, promover.

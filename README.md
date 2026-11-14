@@ -26,7 +26,7 @@ Testes: `.venv\Scripts\python -m pytest tests/unit -q`
 | `BACKEND_TIMEOUT` | `5` | timeout por requisição, em segundos |
 | `BACKEND_MAX_RETRIES` | `3` | tentativas extras após falha (backoff 0.5s, 1s, 2s...) |
 | `RECOGNITION_MODE` | `fake` | `fake`, `tf` (modelos Keras próprios) ou `fpo` (detector próprio + fast-plate-ocr, recomendado) |
-| `FPO_MODEL` | `cct-s-v2-global-model` | modelo do fast-plate-ocr, só em `fpo`; falha ao carregar = `/health/ready` 503 |
+| `FPO_MODEL` | `cct-s-v2-global-model` | modelo do fast-plate-ocr (nome do hub) **ou** caminho de um `.onnx` próprio (ex.: `models/ocr_fpo_br.onnx`, com `ocr_fpo_br_plate_config.yaml` ao lado), só em `fpo`; falha ao carregar = `/health/ready` 503 |
 | `DETECTOR_MODEL_PATH` / `OCR_MODEL_PATH` | `models/detector.keras` / `models/ocr.keras` | usados só em `tf`; modelo ausente = `/health/ready` 503 |
 | `DETECTOR_THRESHOLD` | `0.5` | limiar do mapa de probabilidade do detector |
 | `OCR_MIN_CONFIDENCE` | vazio | se vazio, usa `MIN_CONFIDENCE` também no OCR |
