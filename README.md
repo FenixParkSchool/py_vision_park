@@ -35,6 +35,28 @@ Testes: `.venv\Scripts\python -m pytest tests/unit -q`
 - Pacote `fast-plate-ocr[onnx]==1.1.0` (licença **MIT**), inferência ONNX Runtime em CPU. O detector continua sendo o nosso.
 - Medido no teste do RodoSol (4000 imagens): **78,9% de placa inteira ponta a ponta** (nosso OCR: 25,4%). *Teste RodoSol; pode ser otimista porque não se sabe se o RodoSol estava no treino do modelo.* Confiança = média das probabilidades dos caracteres reais (sem padding). Detalhes e curva por limiar: `models/avaliacao_fpo_integrado.json` (gerado por `experiments/avaliar_fpo.py`).
 - **Pesos offline:** na 1ª execução o pacote baixa o modelo (precisa de internet) para `~/.cache/fast-plate-ocr/<modelo>/` (Windows: pasta `.cache/fast-plate-ocr` dentro do perfil do usuário; contém um `.onnx` e um `_plate_config.yaml`). Para subir sem internet: rode uma vez com internet (por exemplo `.venv\Scripts\python -c "from app.recognition.fpo_reader import FastPlateReader as R; R.from_model('cct-s-v2-global-model')"`) e copie essa pasta para o mesmo caminho na máquina de destino. Sem cache e sem internet, o serviço sobe com `/health/ready` 503.
+- **Modelo ajustado no RodoSol** (`models/ocr_fpo_br.onnx`, fora do git): **94,0%** ponta a ponta no mesmo teste (original 79,7% com o detector atual; motos de 58-77% para 95%). Usar com `FPO_MODEL=models/ocr_fpo_br.onnx`. **Ainda não é o padrão**: falta comparar os dois em placas reais fora do RodoSol (ver `contexto_projeto.md`, seções 20 e 21).
+
+## Ajuste fino do OCR (GPU NVIDIA, Windows nativo, sem WSL2)
+O treino do fast-plate-ocr roda no backend **PyTorch** do Keras 3, que usa a GPU no Windows. O TensorFlow (CPU) só exporta o ONNX.
+```
+# 1) ambiente de treino, fora do repo (uma vez)
+uv venv --python 3.11 %USERPROFILE%\.venvs\alpr-train
+uv pip install --python %USERPROFILE%\.venvs\alpr-train torch --torch-backend=cu128
+uv pip install --python %USERPROFILE%\.venvs\alpr-train "fast-plate-ocr[train,onnx]==1.1.0"
+# 2) dados: recortes do RodoSol (data/rodosol) no formato do fast-plate-ocr
+.venv\Scripts\python -m training.exportar_fpo --regiao Brazil
+# 3) pesos de partida em models/fpo_base/: cct_s_v2_global.keras + _model_config.yaml + _plate_config.yaml
+#    (release "arg-plates" de github.com/ankandrew/fast-plate-ocr)
+# 4) treinar (dentro de data/fpo)
+set KERAS_BACKEND=torch
+fast-plate-ocr train --model-config-file ..\..\models\fpo_base\cct_s_v2_global_model_config.yaml --plate-config-file ..\..\models\fpo_base\cct_s_v2_global_plate_config.yaml --annotations train.csv --val-annotations val.csv --weights-path ..\..\models\fpo_base\cct_s_v2_global.keras --lr 0.0001 --epochs 40 --early-stopping-patience 8 --batch-size 64 --workers 8 --seed 42 --output-dir ..\..\models\fpo_br
+# 5) exportar e avaliar (exportar_onnx_fpo contorna um PermissionError do exportador no Windows)
+set KERAS_BACKEND=tensorflow
+%USERPROFILE%\.venvs\alpr-train\Scripts\python -m training.exportar_onnx_fpo --model models\fpo_br\<data>\best.keras --plate-config models\fpo_base\cct_s_v2_global_plate_config.yaml --out models\ocr_fpo_br.onnx
+.venv\Scripts\python -m experiments.avaliar_fpo --model models\ocr_fpo_br.onnx --out models\avaliacao_fpo_br.json
+```
+Cuidados: confira que a 1ª época já começa perto de 85-89% de `val_plate_acc` (se não, os pesos não carregaram: a CLI usa `skip_mismatch=True` e não avisa). Use threads (`--workers 8`), não `--use-multiprocessing`, que no Windows fica ~7x mais lento. Na RTX 3060: ~1,6 min/época com 12 000 imagens.
 
 ## Health
 - `GET /health/live`: o processo está de pé.

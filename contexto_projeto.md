@@ -495,3 +495,18 @@ Escrito em 13/11/2026. Estado: o serviço já usa o OCR pronto **fast-plate-ocr 
 - **Ressalvas (não ignorar):** (1) treino e teste são do RodoSol (mesma câmera, mesma região, placas do ES); a divisão não se sobrepõe, mas o ganho mede adaptação a esse cenário, **não** a placas de SP. (2) O risco de sobreajuste ao viés de letras do ES (seção 16) **não foi medido**. (3) Continua não sendo possível saber se o RodoSol estava no treino do cct-s-v2 original.
 - **Decisão:** o padrão continua `FPO_MODEL=cct-s-v2-global-model`. Trocar para `models/ocr_fpo_br.onnx` só depois de comparar os dois em 50-100 fotos reais rotuladas fora do RodoSol (webcam/celular, SP). Se o ajustado não piorar nelas, promover.
 - **Back_park (conferido em 14/11/2026):** a branch `fix/restaura-evento-alpr` **já foi mergeada** na `main` pelo PR #63 (`16f5a1e`). O PR #64 (`e2b1dd1`, vagas/reserva), que veio depois, mexeu nos arquivos `contract.*`, mas só acrescentou `PasswordResetTokens`. Continuam na `origin/main`: o model `EventoAlpr`, a rota `/eventos-alpr` com `alprKey`, `ALPR_API_KEY` (vazio = não configurada) e `toPlainDateTimeUtc`. Não há marcadores de conflito em `src/`. A pendência "abrir o PR" da seção 19 está resolvida.
+
+
+## 21. Estado e próximos passos (14/11/2026, madrugada)
+**Estado em uma frase:** o encanamento (câmera, pipeline, evento, backend) está pronto e testado. O backend já tem a integração ALPR na `main`. No teste do RodoSol, detector + OCR ajustado chegam a **94,0%** de placa inteira ponta a ponta. O que falta é **provar fora do RodoSol** (placas reais de SP, webcam) e **enviar uma leitura por veículo**.
+
+**Sem câmera nem Senac (dá para fazer em casa)**
+1. **Viés regional, medida indireta:** comparar original x ajustado no subconjunto do teste cujas posições 1 e 2 **não** usam as letras dominantes do ES (pos1 fora de O/Q/M, pos2 fora de R/P/D). Se o ajustado cair nesse subconjunto, é sinal de que decorou o viés.
+2. **Votação entre quadros + novo deduplicador** (código e testes com sequências sintéticas): juntar as leituras do mesmo veículo numa janela curta, votar e enviar uma vez, no lugar de "primeira leitura passa, mesma placa bloqueada por 30 s".
+3. **Ferramenta de rotulação**, pronta para os vídeos: extrai quadros, roda o detector, salva os recortes e gera um CSV para preencher o texto e marcar "detectou ou não". Depois, compara os modelos com o mesmo `evaluate`.
+4. **Clipe sintético a partir do RodoSol** para o teste ponta a ponta (Milestone 9) até o backend. Atenção: o Back_park local grava no banco **compartilhado** (Neon). Ou se usa um eventId de teste e se apaga depois, ou um branch do Neon. Isso é decisão do usuário.
+5. **Detector com mais dados** (`--per-folder 3000`; o atual usou 4800 das 12 000 de treino). Em CPU, ~1 h ou mais, sem supervisão. Ele é o gargalo do carro com placa antiga (92,8%).
+6. **Teste de fumaça com os modelos reais** (pula sem `models/`) e um comando de regressão antes de promover qualquer modelo.
+7. **Usuário:** pedir acesso a outro dataset brasileiro de pesquisa (ex.: UFPR-ALPR, do mesmo grupo do RodoSol; conferir os termos), para validar a generalização sem fotos próprias.
+
+**Depende de câmera, local ou autorização:** coleta e rotulação de 50-100 placas reais (LGPD: autorização, fora do git); posição e resolução da webcam (`CAP_DSHOW` se precisar); limiar final do OCR pela curva real; volume real de eventos x limite de 300 req/15 min do backend; promover `models/ocr_fpo_br.onnx` a padrão.
