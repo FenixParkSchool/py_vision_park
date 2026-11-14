@@ -1,5 +1,7 @@
 # Treinar com GPU (RTX 3060) via WSL2
 
+> **13/11/2026: dispensável para o ajuste fino.** O fast-plate-ocr treina na GPU no Windows nativo via backend PyTorch (ver `contexto_projeto.md`, seção 20). Este guia só vale para treinar o nosso OCR/detector em TensorFlow na GPU.
+
 Escrito em 13/11/2026. Nada aqui foi executado ainda; os passos seguem a documentação oficial do TensorFlow e da NVIDIA para WSL2.
 
 ## Por que WSL2

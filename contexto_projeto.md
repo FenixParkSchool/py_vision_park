@@ -442,3 +442,35 @@ Escrito em 13/11/2026. Estado: o serviço já usa o OCR pronto **fast-plate-ocr 
 - Teste com câmera real: sem webcam disponível por ora; quando houver, medir em placas de SP (número que vale para a apresentação).
 - Ajuste fino só vale a pena se o ambiente de casa repetir a linha de base (passo 1).
 - Atividade UC 11 (erro/defeito/falha): PDF gerado fora do repo (`C:\Users\thiago.silva37\repos\UC11_Atividade1_Erro_Defeito_Falha.pdf`, capa no template do Senac); falta o nome do docente da UC 11 na folha de rosto.
+
+
+## 20. PC de casa (RTX 3060), 13/11/2026: ambiente pronto e plano do ajuste fino
+**Decisão: sem WSL2.** O treino do fast-plate-ocr usa `PyDataset` do Keras 3, que roda no backend **PyTorch**, e o PyTorch usa a GPU no Windows nativo. O TensorFlow (CPU) só é usado para exportar o ONNX e para os nossos scripts (detector em CPU levou ~14 min). O `docs/gpu_wsl2.md` só seria necessário para o plano B (nosso OCR em TF na GPU), que está despriorizado.
+
+**Ambientes (medidos)**
+- Driver NVIDIA 621.14 (CUDA 13.5), RTX 3060 12 GB, 32 GB RAM. `uv` 0.13.8 em `%USERPROFILE%\.local\bin`.
+- `.venv` do projeto: Python 3.11.18, `uv pip sync requirements.lock` (TF 2.21.0 CPU, Keras 3.15.1, fast-plate-ocr 1.1.0). `pytest tests/unit -q`: **169 passed**.
+- Ambiente de treino **fora do repo**: `C:\Users\Thiago\.venvs\alpr-train` (Python 3.11, `torch==2.11.0+cu128`, `fast-plate-ocr[train,onnx]==1.1.0`). Criado com `uv venv --python 3.11 <dir>`, `uv pip install --python <dir> torch --torch-backend=cu128` e `uv pip install --python <dir> "fast-plate-ocr[train,onnx]==1.1.0"`. Treinar com `KERAS_BACKEND=torch`; exportar com `KERAS_BACKEND=tensorflow`.
+- Dataset movido para `data/rodosol/` (20 000 jpg + txt). `python -m training.exportar_fpo`: 12 000 / 4 000 / 4 000 recortes em `data/fpo/`.
+
+**Pendência da seção 19 resolvida: os pesos Keras do cct-s-v2 existem.** O release `arg-plates` (github.com/ankandrew/fast-plate-ocr) publica `cct_s_v2_global.keras` (17 657 419 bytes, sha256 `dc6db494...`), `cct_s_v2_global_model_config.yaml` e `cct_s_v2_global_plate_config.yaml`. Copiados para `models/fpo_base/`. Plate config: 10 posições, alfabeto `0-9A-Z_`, entrada 64x128 RGB, **cabeça de região** com 66 países (inclui `Brazil`).
+
+**Medido hoje**
+| Teste | Resultado |
+|---|---|
+| Detector retreinado (CPU, `--per-folder 600 --epochs 12`, ~14 min) | val_loss 0.0079, sha256 `e4696ddb...` (o do Senac se perdeu) |
+| Linha de base `avaliar_fpo --limit 0` (4000 de teste) | det 96,8%; OCR isolado 88,4%; **e2e 79,7%** (car/BR 86,0; car/ME 97,9; **moto/BR 58,1**; moto/ME 77,0). Detector 34,6 ms + OCR 15,0 ms. Curva: 0.95 -> 82,4% cobertura / 93,2% precisão |
+| `.keras` do cct-s-v2 no PyTorch/GPU x ONNX oficial (1000 recortes val) | ambos 85,0%; mesma leitura em 99,7% (pesos carregam certo) |
+| Ajuste fino curto (2000 treino, 1000 val, 2 épocas, lr 1e-4, `plate_region=Brazil`) | val placa inteira **85,0% na época 1** (pesos aproveitados) e **87,2% na época 2**; ~30 s/época, com a CPU ocupada por outros processos |
+| ONNX exportado do modelo curto x original (mesmos 1000 val) | **87,3% x 83,0%** |
+
+**Armadilhas encontradas**
+- A CLI carrega os pesos com `load_weights(..., skip_mismatch=True)`: se a arquitetura não bater, ela **ignora a camada em silêncio** e começa do zero. Conferir sempre se a época 1 começa perto de 85%. Usar a coluna `plate_region` (valor `Brazil`) para manter a cabeça de região e a arquitetura idênticas.
+- `fast-plate-ocr export` falha no Windows (`PermissionError` no `NamedTemporaryFile`). Contorno: um wrapper que troca por `NamedTemporaryFile(delete=False)` antes de chamar a CLI (funcionou).
+- `FastPlateReader.from_model` e `avaliar_fpo` só aceitam modelos do hub por nome; para usar ou avaliar um ONNX próprio, falta aceitar `onnx_model_path` + `plate_config_path` (a biblioteca já suporta).
+
+**O que falta para o treino definitivo (em ordem)**
+1. Código (fatias pequenas, com teste): (a) `exportar_fpo --regiao Brazil` grava a coluna `plate_region`; (b) `training/exportar_onnx.py` (wrapper do Windows); (c) `FPO_ONNX_PATH`/`FPO_PLATE_CONFIG_PATH` no `Settings` + `FastPlateReader` + `avaliar_fpo --onnx/--plate-config`.
+2. Treino completo: `fast-plate-ocr train` com `train.csv` (12 000) / `val.csv` (4000), `--weights-path models/fpo_base/cct_s_v2_global.keras --lr 1e-4 --epochs 40 --early-stopping-patience 8 --batch-size 64 --workers 8 --seed 42`. Estimativa (não medida): 2-3 min/época, até ~1,5 h. Se a GPU ficar ociosa, aumentar `--workers` ou usar `--use-multiprocessing`.
+3. Exportar ONNX -> `avaliar_fpo` nas mesmas 4000 de teste. Promover só se passar de **79,7% e2e**, olhando principalmente moto/BR (58,1%) e moto/ME (77,0%).
+4. **Risco principal: sobreajuste ao Espírito Santo.** O RodoSol tem forte viés de letras (pos1 O/Q/M 72%, pos2 R/P/D 63%; seção 16). O ajuste fino pode subir o número no RodoSol e **piorar** em placas de SP. Lr baixo e parada antecipada ajudam, mas não provam nada. A decisão de trocar o modelo precisa de um conjunto **fora do RodoSol**: 50-100 fotos reais rotuladas (webcam ou celular, placas de SP), comparando original x ajustado. Sem isso, manter o original em produção.
