@@ -1,8 +1,53 @@
+from pathlib import Path
 from types import SimpleNamespace
 
+import fast_plate_ocr
 import numpy as np
+import pytest
 
-from app.recognition.fpo_reader import FastPlateReader
+from app.recognition.fpo_reader import FastPlateReader, caminho_plate_config
+
+
+def test_caminho_plate_config_segue_a_convencao_do_fast_plate_ocr():
+    assert caminho_plate_config(Path("models/ocr_br.onnx")) == Path("models/ocr_br_plate_config.yaml")
+
+
+def test_from_model_com_onnx_local_usa_o_arquivo_e_a_config_ao_lado(tmp_path, monkeypatch):
+    onnx = tmp_path / "ocr_br.onnx"
+    onnx.write_bytes(b"x")
+    caminho_plate_config(onnx).write_text("x")
+    recebido = {}
+
+    def falso(*args, **kwargs):
+        recebido.update(args=args, kwargs=kwargs)
+        return SimpleNamespace(config=SimpleNamespace(image_color_mode="rgb"))
+
+    monkeypatch.setattr(fast_plate_ocr, "LicensePlateRecognizer", falso)
+    leitor = FastPlateReader.from_model(str(onnx))
+
+    assert recebido["args"] == ()
+    assert recebido["kwargs"]["onnx_model_path"] == onnx
+    assert recebido["kwargs"]["plate_config_path"] == caminho_plate_config(onnx)
+    assert leitor.model_name == str(onnx)
+
+
+def test_from_model_com_onnx_sem_config_levanta_erro_claro(tmp_path):
+    onnx = tmp_path / "ocr_br.onnx"
+    onnx.write_bytes(b"x")
+    with pytest.raises(FileNotFoundError, match="plate_config"):
+        FastPlateReader.from_model(str(onnx))
+
+
+def test_from_model_com_nome_do_hub_passa_o_nome(monkeypatch):
+    recebido = {}
+
+    def falso(*args, **kwargs):
+        recebido.update(args=args, kwargs=kwargs)
+        return SimpleNamespace(config=SimpleNamespace(image_color_mode="rgb"))
+
+    monkeypatch.setattr(fast_plate_ocr, "LicensePlateRecognizer", falso)
+    FastPlateReader.from_model("cct-s-v2-global-model")
+    assert recebido["args"] == ("cct-s-v2-global-model",)
 
 
 class FakeRec:

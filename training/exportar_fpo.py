@@ -1,8 +1,8 @@
 """Exporta recortes de placa do RodoSol-ALPR no formato de dados do fast-plate-ocr (ajuste fino).
 
-Uso:  python -m training.exportar_fpo [--saida data/fpo] [--margem 0.08]
+Uso:  python -m training.exportar_fpo [--saida data/fpo] [--margem 0.08] [--regiao Brazil]
 Saída: data/fpo/{train,val,test}/*.png e data/fpo/{train,val,test}.csv com as colunas
-       image_path (relativo ao CSV), plate_text  -- formato lido por `fast-plate-ocr train`.
+       image_path (relativo ao CSV), plate_text[, plate_region]  -- formato lido por `fast-plate-ocr train`.
 
 Os recortes usam a caixa do gabarito com uma pequena margem (o leitor recebe, em produção,
 o recorte do nosso detector, que nunca é perfeito). Moto (placa de duas linhas) é exportada
@@ -36,12 +36,15 @@ def nome_saida(caminho: Path) -> str:
     return f"{caminho.parent.name}_{caminho.stem}.png"
 
 
-def exportar(paths: list[Path], pasta: Path, margem: float) -> int:
+def exportar(paths: list[Path], pasta: Path, margem: float, regiao: str | None = None) -> int:
+    """`regiao` (ex.: "Brazil") grava a coluna `plate_region`. Para ajuste fino do cct-s-v2,
+    que tem cabeça de região, ela mantém a arquitetura idêntica à dos pesos pré-treinados
+    (sem ela, a CLI ignora camadas que não batem em silêncio)."""
     pasta.mkdir(parents=True, exist_ok=True)
     linhas = 0
     with open(pasta.with_suffix(".csv"), "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["image_path", "plate_text"])
+        w.writerow(["image_path", "plate_text"] + (["plate_region"] if regiao else []))
         for caminho in paths:
             a = load_sample(caminho).annotation
             img = cv2.imread(str(caminho))
@@ -53,7 +56,7 @@ def exportar(paths: list[Path], pasta: Path, margem: float) -> int:
                 continue
             nome = nome_saida(caminho)
             cv2.imwrite(str(pasta / nome), recorte)
-            w.writerow([f"{pasta.name}/{nome}", a.plate])
+            w.writerow([f"{pasta.name}/{nome}", a.plate] + ([regiao] if regiao else []))
             linhas += 1
     return linhas
 
@@ -62,10 +65,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--saida", type=Path, default=Path("data/fpo"))
     ap.add_argument("--margem", type=float, default=0.08)
+    ap.add_argument("--regiao", default=None, help='grava a coluna plate_region (ex.: "Brazil")')
     args = ap.parse_args()
     divisao = split_paths(find_images(RAIZ))
     for nome in ("train", "val", "test"):
-        n = exportar(divisao[nome], args.saida / nome, args.margem)
+        n = exportar(divisao[nome], args.saida / nome, args.margem, args.regiao)
         print(f"{nome}: {n} recortes -> {args.saida / (nome + '.csv')}")
 
 

@@ -1,5 +1,7 @@
 """OCR pronto: fast-plate-ocr (MIT, ONNX Runtime, CPU). Implementa o Protocol `PlateReader`."""
 
+from pathlib import Path
+
 import cv2
 import numpy as np
 
@@ -9,6 +11,12 @@ from app.recognition.base import PlateReading
 def limpar(texto: str) -> str:
     """Maiúsculas, sem hífen/espaço/padding ('_'). Texto cru: não corrige caracteres."""
     return "".join(c for c in texto.upper() if c.isalnum())
+
+
+def caminho_plate_config(onnx: Path) -> Path:
+    """Config da placa ao lado do modelo, na convenção do fast-plate-ocr:
+    `x/ocr_br.onnx` -> `x/ocr_br_plate_config.yaml`."""
+    return onnx.with_name(f"{onnx.stem}_plate_config.yaml")
 
 
 class FastPlateReader:
@@ -25,10 +33,20 @@ class FastPlateReader:
 
     @classmethod
     def from_model(cls, name: str) -> "FastPlateReader":
-        # Importação tardia: só o modo fpo paga o custo. Baixa o modelo na 1ª vez (precisa de
-        # internet); depois usa o cache local (~/.cache/fast-plate-ocr).
+        """`name` é um modelo do hub (ex.: cct-s-v2-global-model) ou o caminho de um `.onnx`
+        local (ajuste fino nosso), com a config da placa ao lado (`caminho_plate_config`)."""
+        # Importação tardia: só o modo fpo paga o custo. Modelo do hub baixa na 1ª vez (precisa
+        # de internet); depois usa o cache local (~/.cache/fast-plate-ocr).
         from fast_plate_ocr import LicensePlateRecognizer
 
+        if name.lower().endswith(".onnx"):
+            onnx = Path(name)
+            config = caminho_plate_config(onnx)
+            for arquivo in (onnx, config):
+                if not arquivo.is_file():
+                    raise FileNotFoundError(f"arquivo do OCR não encontrado: {arquivo}")
+            rec = LicensePlateRecognizer(onnx_model_path=onnx, plate_config_path=config, device="cpu")
+            return cls(rec, name)
         return cls(LicensePlateRecognizer(name, device="cpu"), name)
 
     def read(self, crop: np.ndarray) -> PlateReading | None:

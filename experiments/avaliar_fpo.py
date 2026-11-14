@@ -1,7 +1,8 @@
 """Avalia o leitor INTEGRADO (app.recognition.fpo_reader.FastPlateReader) com o nosso detector.
 
-Uso: .venv\Scripts\python -m experiments.avaliar_fpo [--limit 0] [--model cct-s-v2-global-model]
-Grava models/avaliacao_fpo_integrado.json.
+Uso: .venv\Scripts\python -m experiments.avaliar_fpo [--limit 0] [--model cct-s-v2-global-model | models/x.onnx]
+                                                    [--out models/avaliacao_fpo_integrado.json]
+`--model` aceita um modelo do hub ou um .onnx local (config da placa ao lado; ver fpo_reader).
 """
 
 import argparse
@@ -14,6 +15,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--model", default="cct-s-v2-global-model")
     ap.add_argument("--detector", type=Path, default=Path("models/detector.keras"))
+    ap.add_argument("--out", type=Path, default=Path("models/avaliacao_fpo_integrado.json"))
     args = ap.parse_args()
 
     from app.recognition.fpo_reader import FastPlateReader
@@ -37,7 +39,7 @@ def main() -> None:
         "grupos": summarize(records),
         "curva_confianca": confidence_curve(records),
     }
-    saida = Path("models/avaliacao_fpo_integrado.json")
+    saida = args.out
     saida.write_text(json.dumps(resultado, indent=2, ensure_ascii=False), encoding="utf-8")
     for nome, g in resultado["grupos"].items():
         print(

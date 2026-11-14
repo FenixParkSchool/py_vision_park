@@ -44,6 +44,23 @@ def test_exportar_grava_png_e_csv_no_formato_do_fast_plate_ocr(tmp_path, monkeyp
     assert (pasta / "cars-me_img_1.png").exists()
 
 
+def test_exportar_com_regiao_grava_a_coluna_plate_region(tmp_path, monkeypatch):
+    frame = np.full((720, 1280, 3), 200, np.uint8)
+
+    class Amostra:
+        class annotation:
+            plate = "ABC1234"
+            bbox = BoundingBox(x=100, y=100, width=120, height=40)
+
+    monkeypatch.setattr(exportar_fpo, "load_sample", lambda p: Amostra)
+    monkeypatch.setattr(exportar_fpo.cv2, "imread", lambda p: frame)
+
+    exportar_fpo.exportar([Path("cars-br/img_2.jpg")], tmp_path / "val", 0.08, regiao="Brazil")
+
+    linhas = list(csv.reader(open(tmp_path / "val.csv", encoding="utf-8")))
+    assert linhas == [["image_path", "plate_text", "plate_region"], ["val/cars-br_img_2.png", "ABC1234", "Brazil"]]
+
+
 @pytest.mark.parametrize("margem", [0.0, 0.08])
 def test_expand_box_margem_zero_mantem_a_caixa(margem):
     caixa = BoundingBox(x=10, y=10, width=50, height=20)
