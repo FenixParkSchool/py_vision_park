@@ -130,3 +130,41 @@ def test_limiar_do_ocr_separado_do_da_deteccao():
     assert RecognitionPipeline(det, leitor, "c", 0.6).process_frame(img, AGORA)  # 0.7 >= 0.6
     sem_ocr = RecognitionPipeline(det, leitor, "c", 0.6, ocr_min_confidence=0.8)
     assert not sem_ocr.process_frame(img, AGORA)
+
+
+class LeitorSequencia:
+    """Devolve uma leitura diferente a cada chamada (simula erros aleatórios do OCR)."""
+
+    def __init__(self, textos, confianca=0.9):
+        self._leituras = iter(PlateReading(t, confianca) for t in textos)
+
+    def read(self, crop):
+        return next(self._leituras)
+
+
+def test_stream_com_votacao_envia_o_veiculo_uma_vez_com_o_texto_votado():
+    from app.services.voter import PlateVoter
+
+    pipeline = RecognitionPipeline(
+        FakePlateDetector([deteccao(0.9)]),
+        LeitorSequencia(["ABE1D23", "ABC1D23", "ABC1O23"]),  # 1ª leitura errada
+        camera_id="portaria-1",
+        min_confidence=0.6,
+        voter=PlateVoter(max_reads=3),
+    )
+    resultado = list(pipeline.process_stream([frame()] * 3))
+    assert [o.plate_text for o in resultado] == ["ABC1D23"]
+
+
+def test_stream_com_votacao_nao_perde_o_veiculo_no_fim_do_video():
+    from app.services.voter import PlateVoter
+
+    pipeline = RecognitionPipeline(
+        FakePlateDetector([deteccao(0.9)]),
+        FakePlateReader(PlateReading("ABC1D23", 0.9)),
+        camera_id="portaria-1",
+        min_confidence=0.6,
+        voter=PlateVoter(max_reads=5, gap_frames=5),
+    )
+    # 2 quadros: nem juntou 5 leituras nem ficou 5 quadros sem ver; sai no flush do fim
+    assert [o.plate_text for o in pipeline.process_stream([frame()] * 2)] == ["ABC1D23"]

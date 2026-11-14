@@ -29,7 +29,12 @@ class Settings(BaseSettings):
     detector_threshold: float = Field(default=0.5, ge=0, le=1)  # limiar do mapa de probabilidade
     # Se vazio, o OCR usa o mesmo min_confidence da detecção. Separar só com dados reais.
     ocr_min_confidence: float | None = Field(default=None, ge=0, le=1)
-    
+    # Votação entre quadros (app/services/voter.py), em QUADROS AMOSTRADOS (ver
+    # sample_interval_seconds): envia o veículo após vote_max_reads leituras ou após
+    # vote_gap_frames quadros sem vê-lo. Com amostragem de 1 s, 3 quadros = ~3 s. Provisório.
+    vote_max_reads: int = Field(default=3, ge=1)
+    vote_gap_frames: int = Field(default=3, ge=1)
+
     # Os valores 0.6, 30 e 1.0 são padrões de desenvolvimento, ainda não validados. Só serão ajustados quando houver dados reais.
 
 

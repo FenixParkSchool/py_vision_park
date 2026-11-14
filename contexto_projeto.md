@@ -510,3 +510,49 @@ Escrito em 13/11/2026. Estado: o serviço já usa o OCR pronto **fast-plate-ocr 
 7. **Usuário:** pedir acesso a outro dataset brasileiro de pesquisa (ex.: UFPR-ALPR, do mesmo grupo do RodoSol; conferir os termos), para validar a generalização sem fotos próprias.
 
 **Depende de câmera, local ou autorização:** coleta e rotulação de 50-100 placas reais (LGPD: autorização, fora do git); posição e resolução da webcam (`CAP_DSHOW` se precisar); limiar final do OCR pela curva real; volume real de eventos x limite de 300 req/15 min do backend; promover `models/ocr_fpo_br.onnx` a padrão.
+
+### Votação entre quadros implementada (14/11/2026)
+- `app/services/voter.py` (`PlateVoter`), ligado em `build_pipeline`. Ordem em `process_stream`: leituras do quadro -> votação -> `Deduplicator` -> worker (filtro de formato -> backend).
+- **Regras:**
+  - Uma leitura válida entra no grupo cujo texto votado difere dela em até 2 posições (mesmo veículo); se nenhum servir, abre um grupo novo.
+  - O grupo é enviado uma vez: com `VOTE_MAX_READS` leituras (padrão 3) ou após `VOTE_GAP_FRAMES` quadros amostrados sem leitura (padrão 3), o que vier primeiro. Depois de enviado, continua absorvendo leituras do mesmo veículo sem reenviar.
+  - Voto por posição com peso pela confiança. Uma combinação por posição de leituras válidas é sempre válida, então não há fallback.
+  - O `captured_at` do evento é o da 1ª leitura; `ocr_confidence` é a média das leituras iguais ao resultado.
+  - Leituras fora do formato não votam: passam direto e continuam contando em `invalid_plates`.
+  - No fim do vídeo ou na parada da câmera, `flush()` envia o que estava pendente.
+- **Por que quadros, e não segundos:** um vídeo gravado é processado mais rápido que o tempo real. Contando quadros amostrados, a regra vale igual para webcam e arquivo. O `Deduplicator` continua em segundos de relógio; em vídeo gravado, a janela de 30 s cobre muito mais vídeo do que 30 s.
+- **Testes:** 14 em `test_voter.py` e 2 em `test_pipeline.py` (o 1º erro do OCR é corrigido pelo voto; o veículo não se perde no fim do vídeo). Suíte: **190 passed**.
+- **Não medido:** o ganho real depende de quantos quadros cada veículo rende. Com `SAMPLE_INTERVAL_SECONDS=1.0`, um carro que passa rápido pode render só 1 ou 2 leituras. Cada quadro custa ~50 ms em CPU (detector + OCR), então baixar para 0,25-0,5 s é viável. Ajustar `SAMPLE_INTERVAL_SECONDS`, `VOTE_MAX_READS` e `VOTE_GAP_FRAMES` com vídeo real (Milestone 9).
+
+
+## 22. Resumo de 13-14/11/2026 e pendências (ponto de partida da próxima sessão)
+**Feito no PC de casa (RTX 3060)**
+- Ambiente Windows nativo, sem WSL2: `.venv` do projeto (Python 3.11) e um venv de treino com PyTorch/CUDA em `%USERPROFILE%\.venvs\alpr-train` (seção 20).
+- Detector retreinado (`models/detector.keras`, 96,8% no teste).
+- Ajuste fino do fast-plate-ocr `cct-s-v2` na GPU: `models/ocr_fpo_br.onnx`, **94,0%** de placa inteira ponta a ponta no teste do RodoSol (original: 79,7%). Motos passaram de 58-77% para ~95%.
+- Código:
+  - `FPO_MODEL` aceita um `.onnx` próprio;
+  - `exportar_fpo --regiao`;
+  - `training/exportar_onnx_fpo.py`;
+  - `avaliar_fpo --out`;
+  - **votação entre quadros** (`app/services/voter.py`).
+- 190 testes passando.
+- Back_park: a integração ALPR já está na `main` (PR #63) e foi conferida depois do PR #64.
+- Os modelos, `data/` e os logs ficam fora do git, **só neste PC**. Copiar `models/` (detector, `ocr_fpo_br.onnx` + `_plate_config.yaml`, `fpo_base/`) para pendrive ou nuvem antes de trocar de máquina.
+
+**Pendências, em ordem (o que bloqueia o uso real primeiro)**
+1. **Validar com placas reais fora do RodoSol** (bloqueia a troca do OCR padrão). Coletar 50-100 veículos com a webcam ou o celular, na posição real da câmera, de dia e à noite; com autorização (LGPD) e fora do git. Rotular o texto e "detectou ou não". Comparar o original com o ajustado (detecção, OCR, ponta a ponta, curva de confiança). Critério: ajustado >= original -> `FPO_MODEL=models/ocr_fpo_br.onnx` vira o padrão. Fixar o `OCR_MIN_CONFIDENCE` pela curva real (hoje 0.95, medido no RodoSol). A ferramenta de rotulação ainda não existe; é rápida de fazer quando houver vídeo.
+2. **Teste ponta a ponta com vídeo (Milestone 9):** câmera ou arquivo -> pipeline -> votação -> backend. Conferir um evento por veículo, com a placa certa, no banco. Ajustar `SAMPLE_INTERVAL_SECONDS` (sugestão: 0,25-0,5 s, ~50 ms por quadro em CPU), `VOTE_MAX_READS` e `VOTE_GAP_FRAMES`. Atenção: o Back_park local grava no banco **compartilhado** (Neon); usar eventId de teste e apagar depois, ou um branch do Neon.
+3. **Webcam USB real:** resolução, `CAP_DSHOW` se precisar, posição e ângulo. Conferir se a placa aparece com tamanho parecido ao do RodoSol (~125x42 px no carro).
+4. **Volume de eventos** contra o limite do backend (300 req/15 min por IP), medido com vídeo real.
+5. **Opcional, só se a validação real apontar:**
+   - detector com mais dados (`--per-folder 3000`; o atual usou 4800 de 12 000), porque ele é o gargalo do carro com placa antiga (92,8%);
+   - medir o viés regional no subconjunto de letras raras;
+   - teste de fumaça com os modelos reais;
+   - comando de regressão antes de promover um modelo;
+   - pedir o UFPR-ALPR como teste fora do RodoSol.
+
+**Limitações conhecidas**
+- O `Deduplicator` conta segundos de relógio; num vídeo gravado (processado mais rápido que o tempo real), 30 s cobrem mais vídeo. A votação conta quadros e não tem esse problema.
+- Os 94% são do RodoSol (placas do ES, mesma câmera); não valem automaticamente para SP.
+- Não se sabe se o RodoSol estava no treino do `cct-s-v2` original.

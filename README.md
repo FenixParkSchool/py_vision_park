@@ -30,6 +30,8 @@ Testes: `.venv\Scripts\python -m pytest tests/unit -q`
 | `DETECTOR_MODEL_PATH` / `OCR_MODEL_PATH` | `models/detector.keras` / `models/ocr.keras` | usados só em `tf`; modelo ausente = `/health/ready` 503 |
 | `DETECTOR_THRESHOLD` | `0.5` | limiar do mapa de probabilidade do detector |
 | `OCR_MIN_CONFIDENCE` | vazio | se vazio, usa `MIN_CONFIDENCE` também no OCR |
+| `VOTE_MAX_READS` | `3` | votação: envia o veículo depois de N leituras dele (provisório) |
+| `VOTE_GAP_FRAMES` | `3` | votação: ou depois de N quadros amostrados sem vê-lo (com 1 quadro/s, ~3 s; provisório) |
 
 ## OCR fast-plate-ocr (modo `fpo`)
 - Pacote `fast-plate-ocr[onnx]==1.1.0` (licença **MIT**), inferência ONNX Runtime em CPU. O detector continua sendo o nosso.
@@ -69,6 +71,7 @@ Reenvia em rede/timeout/409/429/5xx (429 respeita `Retry-After`, teto de 30s); n
 
 ## Políticas
 - **Perda de eventos:** se o backend rejeitar ou ficar indisponível após as tentativas, o evento é logado e **descartado**; não há fila nem banco. O worker continua.
+- **Uma leitura por veículo (votação):** leituras parecidas (até 2 caracteres diferentes) em quadros seguidos são do mesmo veículo. Ele é enviado **uma vez**, com o texto votado posição a posição (peso = confiança do OCR), depois de `VOTE_MAX_READS` leituras ou de `VOTE_GAP_FRAMES` quadros sem vê-lo. Depois disso, o `DEDUP_SECONDS` impede reenviar o mesmo veículo que reaparece. No fim do vídeo ou na parada da câmera, o que estava em votação é enviado. Código: `app/services/voter.py`.
 - **Placa inválida:** só formatos Mercosul (`ABC1D23`) e antigo (`ABC1234`) são enviados. Caracteres ambíguos (O/0, I/1) **não** são corrigidos; leituras fora do formato são descartadas e contadas em `invalid_plates`.
 - **Erro de câmera, detector ou OCR:** o worker para e `/health/ready` passa a responder 503.
 - **Privacidade:** não se loga frame completo nem placa completa por padrão.

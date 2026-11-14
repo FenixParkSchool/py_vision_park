@@ -12,6 +12,7 @@ from app.recognition.fakes import FakePlateDetector, FakePlateReader
 from app.services.backend_client import BackendClient
 from app.services.deduplicator import Deduplicator
 from app.services.pipeline import RecognitionPipeline
+from app.services.voter import PlateVoter
 from app.services.worker import AlprWorker
 
 log = logging.getLogger(__name__)
@@ -53,6 +54,7 @@ def build_pipeline(settings, deduplicator: Deduplicator) -> RecognitionPipeline:
         settings.min_confidence,
         deduplicator,
         ocr_min_confidence=settings.ocr_min_confidence,
+        voter=PlateVoter(max_reads=settings.vote_max_reads, gap_frames=settings.vote_gap_frames),
     )
 
 
